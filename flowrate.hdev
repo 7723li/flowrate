@@ -3,22 +3,25 @@
 <procedure name="main">
 <interface/>
 <body>
+<c>* 注意</c>
+<c>* 清晰度算法另作函数get_image_sharpnessx单独调用 在内部调用了预处理函数pre_process </c>
+<c>* 合理清晰度暂定为0.167以上</c>
+<c>* 以下为使用demo</c>
+<l>* Sharpnesses := []</l>
+<l>* for I := 0 to 347 by 1</l>
+<l>*     get_image_sharpness (Image, 'D:/codes/PicAndTemplate/V1001559/', I, Sharpness)</l>
+<l>*     Sharpnesses := [Sharpnesses, Sharpness]</l>
+<l>* endfor</l>
+<l>* tuple_sort(Sharpnesses, Sorted)</l>
+<l>* tuple_inverse(Sorted, Inverted)</l>
+<l>* tuple_sort_index(Sharpnesses, Indices)</l>
+<l>* tuple_inverse(Indices, Inverted1)</l>
+<c></c>
 <c>***************************************新型防抖骗术BEGIN***************************************</c>
 <l>Areas := []</l>
 <l>dev_update_off()</l>
 <c></c>
 <l>firstIndex := 0</l>
-<c></c>
-<c>* 注意 清晰度算法另作函数get_image_sharpnessx单独调用 在内部调用了预处理函数pre_process 合理清晰度暂定为1.67以上</c>
-<l>Sharpnesses := []</l>
-<l>for I := 0 to 347 by 1</l>
-<l>    get_image_sharpness (Image, 'D:/codes/PicAndTemplate/V1001559/', I, Sharpness)</l>
-<l>    Sharpnesses := [Sharpnesses, Sharpness]</l>
-<l>endfor</l>
-<l>tuple_sort(Sharpnesses, Sorted)</l>
-<l>tuple_inverse(Sorted, Inverted)</l>
-<l>tuple_sort_index(Sharpnesses, Indices)</l>
-<l>tuple_inverse(Indices, Inverted1)</l>
 <c></c>
 <c>* 首帧预处理 对应的变量用在后续的后帧缓存</c>
 <l>pre_process (ImagePrev, ImagePrevGauss, RegionUnionPrev, 'D:/codes/PicAndTemplate/EV_PIC/', firstIndex, Width, Height)</l>

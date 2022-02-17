@@ -415,6 +415,12 @@ void Widget::slotRefreshFramerate()
 void Widget::slotCalcSharpness(double sharpness)
 {
     mSharpness = sharpness;
+
+    // 暂定清晰度阈值为0.167
+    if(mSharpness >= 0.167)
+    {
+
+    }
 }
 
 void Widget::asyncUpdateAvaliableCameras()

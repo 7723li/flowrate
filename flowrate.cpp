@@ -31,7 +31,7 @@ QVector<double> Flowrate::calFlowrate(const QVector<QImage>& imagelist)
     HTuple  hv_RegionCellTracksArea, hv_RegionCellTracksRow;
     HTuple  hv_RegionCellTracksColumn;
 
-    QVector<double> flowrate(imagelist.size(), 0);
+    QVector<double> flowrates(imagelist.size(), 0);
 
     //首帧预处理 对应的变量用在后续的后帧缓存
     PreProcess(imagelist[0], &ImagePrev, &ImagePrevGauss, &RegionUnionPrev);
@@ -190,7 +190,7 @@ QVector<double> Flowrate::calFlowrate(const QVector<QImage>& imagelist)
         //以大恒为例 若算出AB帧之间轨迹面积为1000px 像素尺寸为常量5.6um/px 放大倍率为常量5 帧率为常量30fps
         //则AB帧之间的流速为 1000 * (5.6/1000) / 5 / (1000/30) = 5.6 / 5 / 1000 * 30 = 0.0336mm/ms
         AreaCenter(RegionCellTrack, &hv_RegionCellTracksArea, &hv_RegionCellTracksRow, &hv_RegionCellTracksColumn);
-        flowrate[i - 1] = hv_RegionCellTracksArea.D();
+        flowrates[i - 1] = hv_RegionCellTracksArea.D();
 
         //后帧变前帧
         ImagePrev = ImageRear;
@@ -198,7 +198,7 @@ QVector<double> Flowrate::calFlowrate(const QVector<QImage>& imagelist)
         RegionUnionPrev = RegionUnionRear;
     }
 
-    return flowrate;
+    return flowrates;
 }
 
 double Flowrate::GetImageSharpness(const QImage &Image)
@@ -211,7 +211,7 @@ double Flowrate::GetImageSharpness(const QImage &Image)
 
     PreProcess(Image, &ImageOri, &ImageGuass, &RegionUnion);
 
-    ReduceDomain(ImageOri, RegionUnion, &ImageReduced);
+    ReduceDomain(ImageGuass, RegionUnion, &ImageReduced);
 
     SobelAmp(ImageReduced, &EdgeAmplitude, "sum_abs", 7);
 
@@ -262,7 +262,7 @@ void Flowrate::PreProcess(const QImage& image, HObject* Image, HObject *ImageGau
     Connection(RegionDynThresh, &ConnectedRegions);
 
     //根据面积筛选掉噪音
-    SelectShape(ConnectedRegions, &SelectedRegions, "area", "and", 400, image.width() * image.height());
+    SelectShape(ConnectedRegions, &SelectedRegions, "area", "and", 50, image.width() * image.height());
 
     //合并 检测到的分散血管区域 后面有用
     Union1(SelectedRegions, &(*RegionUnion));
