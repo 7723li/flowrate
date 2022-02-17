@@ -77,6 +77,55 @@ private:
     QEventLoop mEventLoop;
 };
 
+/*!
+* @brief
+* 异步帧写入
+*/
+class AsyncFlowrateCalculator : public QThread
+{
+    Q_OBJECT
+
+    struct lock
+    {
+        lock(){ _mutex.lock(); }
+        ~lock(){ _mutex.unlock(); }
+        std::mutex _mutex;
+    };
+
+public:
+    explicit AsyncFlowrateCalculator();
+    virtual ~AsyncFlowrateCalculator() override;
+
+    void setImageFormat(const QImage& image, int imageSize);
+
+    void startCalculate();
+
+    bool calculating();
+
+    void stopCalculate();
+
+    void cache(const cv::Mat& mat);
+
+protected:
+    virtual void run() override;
+
+signals:
+    void signalUpdateSharpness(double);
+
+private:
+    QImage mCalculateImage;
+    int mImageSize;
+
+    bool mCalculating;
+
+    std::vector<cv::Mat> mCacheQueue;
+    std::vector<bool> mOccupied;
+    int mCacheIndex;
+    int mCalculateIndex;
+
+    QEventLoop mEventLoop;
+};
+
 class Widget : public QWidget
 {
     Q_OBJECT
@@ -121,6 +170,8 @@ private slots:
 
     void slotRefreshFramerate();
 
+    void slotCalcSharpness(double sharpness);
+
 private:
     inline void asyncUpdateAvaliableCameras();
 
@@ -148,9 +199,9 @@ private:
     int mFrameHeight;                               // 高
     int mPixelByteCount;                            // 一像素占用的字节数
 
-    QImage mDisplayImage;                           // 用来显示的图像
-    QImage mRecvImage;                              // 接收到的图像
     int mImageSize;                                 // 图像尺寸
+    QImage mRecvImage;                              // 接收到的图像
+    QImage mDisplayImage;                           // 用来显示的图像
 
     QPainter mPainter;
 
@@ -173,4 +224,7 @@ private:
 
     bool mIsUpdatingCameraList;                     // 是否正在更新相机列表
     bool mShowDebugMessage;                         // 显示调试信息
+
+    AsyncFlowrateCalculator mAsyncFlowrateCalculator;   // 异步计算图像清晰度 后续拓展成异步计算流速
+    double mSharpness;                              // 清晰度
 };

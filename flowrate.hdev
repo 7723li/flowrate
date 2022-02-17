@@ -9,26 +9,41 @@
 <c></c>
 <l>firstIndex := 0</l>
 <c></c>
+<c>* 注意 清晰度算法另作函数get_image_sharpnessx单独调用 在内部调用了预处理函数pre_process 合理清晰度暂定为1.67以上</c>
+<l>Sharpnesses := []</l>
+<l>for I := 0 to 347 by 1</l>
+<l>    get_image_sharpness (Image, 'D:/codes/PicAndTemplate/V1001559/', I, Sharpness)</l>
+<l>    Sharpnesses := [Sharpnesses, Sharpness]</l>
+<l>endfor</l>
+<l>tuple_sort(Sharpnesses, Sorted)</l>
+<l>tuple_inverse(Sorted, Inverted)</l>
+<l>tuple_sort_index(Sharpnesses, Indices)</l>
+<l>tuple_inverse(Indices, Inverted1)</l>
+<c></c>
 <c>* 首帧预处理 对应的变量用在后续的后帧缓存</c>
-<l>pre_process (ImagePrev, ImagePrevGauss, RegionUnionPrev, 'D:/codes/PicAndTemplate/white/', firstIndex, Width, Height)</l>
+<l>pre_process (ImagePrev, ImagePrevGauss, RegionUnionPrev, 'D:/codes/PicAndTemplate/EV_PIC/', firstIndex, Width, Height)</l>
+<c></c>
+<c>* TODO 血管分段</c>
+<l>* skeleton(RegionUnionPrev, Skeleton)</l>
+<l>* gen_contours_skeleton_xld(Skeleton, Contours, 6, 'filter')</l>
 <c></c>
 <c>* 遍历图像序列</c>
-<l>for I:=firstIndex+1 to 347 by 1</l>
+<l>for I:=firstIndex+1 to firstIndex+100 by 1</l>
 <c>    * 前帧血管区域判空 若为空 next one</c>
 <l>    area_center(RegionUnionPrev, AreaRegionUnionPrev, useless, useless)</l>
 <l>    if(|AreaRegionUnionPrev| == 0 or -1 == AreaRegionUnionPrev)</l>
-<l>        pre_process (ImagePrev, ImagePrevGauss, RegionUnionPrev, 'D:/codes/PicAndTemplate/white/', I, Width, Height)</l>
+<l>        pre_process (ImagePrev, ImagePrevGauss, RegionUnionPrev, 'D:/codes/PicAndTemplate/EV_PIC/', I, Width, Height)</l>
 <l>        continue</l>
 <l>    endif</l>
 <c>    </c>
 <c>    * 后一帧预处理</c>
-<l>    pre_process (ImageRear, ImageRearGauss, RegionUnionRear, 'D:/codes/PicAndTemplate/white/', I, Width, Height)</l>
+<l>    pre_process (ImageRear, ImageRearGauss, RegionUnionRear, 'D:/codes/PicAndTemplate/EV_PIC/', I, Width, Height)</l>
 <c>    </c>
 <c>    * 后帧血管区域判空 若为空 next one</c>
 <l>    area_center(RegionUnionRear, AreaRegionUnionRear, useless, useless)</l>
 <l>    if(|AreaRegionUnionRear| == 0 or -1 == AreaRegionUnionRear)</l>
 <l>        I := I + 1</l>
-<l>        pre_process (ImagePrev, ImagePrevGauss, RegionUnionPrev, 'D:/codes/PicAndTemplate/white/', I, Width, Height)</l>
+<l>        pre_process (ImagePrev, ImagePrevGauss, RegionUnionPrev, 'D:/codes/PicAndTemplate/EV_PIC/', I, Width, Height)</l>
 <l>        continue</l>
 <l>    endif</l>
 <c>    </c>
@@ -131,7 +146,7 @@
 <l>*     dev_display(RegionUnionPrevRear)</l>
 <c>    </c>
 <c>    * 输出膨胀后的血管检测区域 调试用</c>
-<l>    debug_output_vesselConnect(RegionUnionPrevRear, ImagePrev, 'D:/codes/PicAndTemplate/white/1_CellTrack/_vesselConnect', I)</l>
+<l>*     debug_output_vesselConnect (RegionUnionPrevRear, ImagePrev, ImageRear, 'D:/codes/PicAndTemplate/EV_PIC/1_CellTrack/_vesselConnect', I)</l>
 <c>        </c>
 <c>    * 计算前后两帧的区别</c>
 <l>    reduce_domain(ImagePrevGauss, RegionUnionPrevRear, ImagePrevCalRegion)</l>
@@ -140,26 +155,24 @@
 <c>    * 由于后帧发生过移动 因此ROI截取到的位置不一定完全重叠</c>
 <l>    intersection(ImagePrevCalRegion, ImageRearCalRegion, ROIintersection)</l>
 <c>    </c>
+<c>    * 截取最终的血管区域</c>
 <l>    reduce_domain(ImagePrevGauss, ROIintersection, ImagePrevCalRegion)</l>
 <l>    reduce_domain(ImageRearGaussTrans, ROIintersection, ImageRearCalRegion)</l>
 <c>    </c>
-<c>    * 平衡亮度</c>
-<l>    illuminate(ImagePrevCalRegion, ImagePrevCalRegionILL, 40, 40, 0.55)</l>
-<l>    illuminate(ImageRearCalRegion, ImageRearCalRegionILL, 40, 40, 0.55)</l>
+<c>    * 用帧差法检测流动轨迹</c>
+<c>    * 先直方图均衡降低亮度变化带来的影响</c>
+<c>    * 红细胞是低灰度 背景是高灰度 要获取红细胞轨迹 应该先反转灰度再相减</c>
+<l>    equ_histo_image(ImagePrevCalRegion, ImagePrevCalRegionEquHisto)</l>
+<l>    equ_histo_image(ImageRearCalRegion, ImageRearCalRegionEquHisto)</l>
+<l>    invert_image(ImagePrevCalRegionEquHisto, ImagePrevCalRegionInvert)</l>
+<l>    invert_image(ImageRearCalRegionEquHisto, ImageRearCalRegionInvert)</l>
+<l>    sub_image(ImageRearCalRegionInvert, ImagePrevCalRegionInvert, ImageCellTrackRegion, 1, 0)</l>
+<c>    </c>
+<l>    mean_image(ImageCellTrackRegion, ImageMean, 43, 43)</l>
+<l>    dyn_threshold(ImageCellTrackRegion, ImageMean, RegionCellTrack, 6, 'light')</l>
 <c>    </c>
 <c>    * 输出前后帧血管截图 调试用</c>
-<l>    debug_output_calRegion_Prev_Rear(ImagePrevCalRegionILL, ImageRearCalRegionILL, 'D:/codes/PicAndTemplate/white/1_CellTrack/calRegion', I)</l>
-<c></c>
-<c>    * 轨迹检测法1 卡尔曼滤波</c>
-<l>*     create_bg_esti(ImagePrevCalRegion, 0.7, 0.7, 'fixed', 0.002, 0.02, 'on', 7, 10, 3.25, 15, BgEstiHandle)</l>
-<l>*     run_bg_esti(ImageRearCalRegion, RegionCellTrack, BgEstiHandle)</l>
-<c>    </c>
-<c>    * 轨迹检测法2 帧差法</c>
-<c>    * 注意：红细胞是低灰度 背景是高灰度 要获取红细胞轨迹 应该先反转灰度再相减</c>
-<l>    invert_image(ImagePrevCalRegionILL, ImagePrevCalRegionInvert)</l>
-<l>    invert_image(ImageRearCalRegionILL, ImageRearCalRegionInvert)</l>
-<l>    sub_image(ImageRearCalRegionInvert, ImagePrevCalRegionInvert, ImageCellTrackRegion, 1, 0)</l>
-<l>    threshold(ImageCellTrackRegion, RegionCellTrack, 6, 255)</l>
+<l>*     debug_output_calRegion_Prev_Rear(ImagePrevCalRegionEquHisto, ImageRearCalRegionEquHisto, 'D:/codes/PicAndTemplate/EV_PIC/1_CellTrack/calRegion', I)</l>
 <c>    </c>
 <c>    * 输出/调试显示</c>
 <l>*     boundary(RegionCellTrack, RegionCellTrackBorder, 'inner')</l>
@@ -170,7 +183,7 @@
 <l>*     stop()</l>
 <c>    </c>
 <c>    * debug输出用的图像 1.ImageCellTrackR 细胞运动路径图 2.ImageCellTrack_bg_R 带背景(bg)的细胞运动路径图</c>
-<l>    debug_output_track_and_track_bg(ImagePrev, RegionUnionPrevRear, RegionCellTrack, Width, Height, 'D:/codes/PicAndTemplate/white/1_CellTrack/track', I)</l>
+<l>*     debug_output_track_and_track_bg(ImagePrev, RegionUnionPrevRear, RegionCellTrack, Width, Height, 'D:/codes/PicAndTemplate/EV_PIC/1_CellTrack/track', I)</l>
 <c></c>
 <c>    * 计算流动轨迹面积</c>
 <c>    * 令 红细胞流速(mm/ms) = 流动轨迹面积(px) * 像素尺寸(mm/px) / 放大倍率 / 前后帧时间差(ms)</c>
@@ -197,6 +210,7 @@
 <io>
 <par name="RegionUnionPrevRear" base_type="iconic" dimension="0"/>
 <par name="ImagePrev" base_type="iconic" dimension="0"/>
+<par name="ImageRear" base_type="iconic" dimension="0"/>
 </io>
 <ic>
 <par name="path" base_type="ctrl" dimension="0"/>
@@ -217,13 +231,26 @@
 <c></c>
 <l>compose3(ImageVesselR, ImageVesselG, ImageVesselB, ImageVesselRGB)</l>
 <c></c>
-<l>write_image(ImageVesselRGB, 'png', 0, path + (Index-1) + '_' + Index + '.png')</l>
+<l>write_image(ImageVesselRGB, 'png', 0, path + (Index-1) + 'Prev.png')</l>
+<c></c>
+<l>copy_image(ImageRear, ImageVesselR)</l>
+<l>copy_image(ImageRear, ImageVesselG)</l>
+<l>copy_image(ImageRear, ImageVesselB)</l>
+<c></c>
+<l>overpaint_region(ImageVesselR, RegionUnionPrevRearBorder, 255, 'fill')</l>
+<l>overpaint_region(ImageVesselG, RegionUnionPrevRearBorder, 0, 'fill')</l>
+<l>overpaint_region(ImageVesselB, RegionUnionPrevRearBorder, 0, 'fill')</l>
+<c></c>
+<l>compose3(ImageVesselR, ImageVesselG, ImageVesselB, ImageVesselRGB)</l>
+<c></c>
+<l>write_image(ImageVesselRGB, 'png', 0, path + (Index-1) + 'Rear.png')</l>
 <c></c>
 <l>return ()</l>
 </body>
 <docu id="debug_output_vesselConnect">
 <parameters>
 <parameter id="ImagePrev"/>
+<parameter id="ImageRear"/>
 <parameter id="Index"/>
 <parameter id="RegionUnionPrevRear"/>
 <parameter id="path"/>
@@ -337,7 +364,7 @@
 </oc>
 </interface>
 <body>
-<l>read_image(Image, path + Index$'04')</l>
+<l>read_image(Image, path + Index)</l>
 <c></c>
 <l>get_image_size(Image, Width, Height)</l>
 <c></c>
@@ -356,11 +383,10 @@
 <l>connection(RegionDynThresh, ConnectedRegions)</l>
 <c></c>
 <c>* 根据面积筛选掉噪音</c>
-<l>select_shape(ConnectedRegions, SelectedRegions, 'area', 'and', 400, Width*Height)</l>
+<l>select_shape(ConnectedRegions, SelectedRegions, 'area', 'and', 50, Width*Height)</l>
 <c></c>
 <c>* 合并 检测到的分散血管区域 后面有用</c>
 <l>union1(SelectedRegions, RegionUnion)</l>
-<c></c>
 <c></c>
 <l>return ()</l>
 </body>
@@ -373,6 +399,58 @@
 <parameter id="RegionUnion"/>
 <parameter id="Width"/>
 <parameter id="path"/>
+</parameters>
+</docu>
+</procedure>
+<procedure name="get_image_sharpness">
+<interface>
+<oo>
+<par name="Image" base_type="iconic" dimension="0"/>
+</oo>
+<ic>
+<par name="Path" base_type="ctrl" dimension="0"/>
+<par name="Index" base_type="ctrl" dimension="0"/>
+</ic>
+<oc>
+<par name="Sharpness" base_type="ctrl" dimension="0"/>
+</oc>
+</interface>
+<body>
+<l>pre_process(Image, ImageGauss, RegionUnion, Path, Index, Width, Height)</l>
+<c></c>
+<l>reduce_domain (ImageGauss, RegionUnion, ImageReduced)</l>
+<c></c>
+<l>sobel_amp(ImageReduced, EdgeAmplitude, 'sum_abs', 7)</l>
+<c>    </c>
+<l>gen_rectangle1(rect, 0, 0, Height, Width)</l>
+<l>min_max_gray(rect, EdgeAmplitude, 0, Min, Max, Range)</l>
+<c></c>
+<l>if(Min==0)</l>
+<l>    Min:=1</l>
+<l>elseif(Min&gt;5)</l>
+<l>    Min:=5</l>
+<l>endif</l>
+<l>edges_sub_pix(EdgeAmplitude, Edges, 'canny', 1, Min, 5)</l>
+<c></c>
+<l>length_xld(Edges, Length)</l>
+<l>if(|Length|)</l>
+<l>    area_center(RegionUnion, AreaRegionUnion, useless, useless)</l>
+<l>    if(AreaRegionUnion &gt; 0)</l>
+<l>        tuple_sum(Length, Sum)</l>
+<l>        Sharpness := Sum / AreaRegionUnion</l>
+<l>    endif</l>
+<l>else</l>
+<l>    Sharpness := 0</l>
+<l>endif</l>
+<c></c>
+<l>return ()</l>
+</body>
+<docu id="get_image_sharpness">
+<parameters>
+<parameter id="Image"/>
+<parameter id="Index"/>
+<parameter id="Path"/>
+<parameter id="Sharpness"/>
 </parameters>
 </docu>
 </procedure>

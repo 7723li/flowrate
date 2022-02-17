@@ -15,6 +15,8 @@ public:
 
     static QVector<double> calFlowrate(const QVector<QImage>& imagelist);
 
-private:
-    static void pre_process (const QImage& image, HObject* ho_Image, HObject *ho_ImageGauss, HObject *ho_RegionUnion);
+    static double GetImageSharpness(const QImage& Image);
+
+protected:
+    static void PreProcess (const QImage& image, HObject* ho_Image, HObject *ho_ImageGauss, HObject *ho_RegionUnion);
 };

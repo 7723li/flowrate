@@ -5,7 +5,7 @@ Widget::Widget(QWidget *parent)
     mUsingCamera(nullptr), mIsCameraOpen(false), mIsCameraCapturing(false),
     mLib("GenericCameraModule.dll"), mCommonFuncPtr(nullptr), mRuntimeFramerateFuncPtr(nullptr), mCameraParamWidget(new CameraParamWidget(mLib)),
     mFrameWidth(0), mFrameHeight(0), mPixelByteCount(0), mImageSize(0), mVideoRecorder(new AsyncVideoRecorder(mVideoWriter)), mConfigFramerate(0.0), mRunningFramerate(0.0),
-    mLastSecondRecvFrameCount(0), mLastSecondRecvFrameCountDisplay(0), mIsUpdatingCameraList(false), mShowDebugMessage(false)
+    mLastSecondRecvFrameCount(0), mLastSecondRecvFrameCountDisplay(0), mIsUpdatingCameraList(false), mShowDebugMessage(true), mSharpness(0.0)
 {
     qDebug() << "lib.load GenericCameraModule.dll" << mLib.load();
 
@@ -23,11 +23,14 @@ Widget::Widget(QWidget *parent)
 
     mDisplayTimer.setInterval(40);
     connect(&mDisplayTimer, SIGNAL(timeout()), this, SLOT(update()));
+    mDisplayTimer.start();
 
     mRuntimeFramerateFuncPtr = mLib.resolve("getRuntimeFramerate");
 
     mGetRuntimeFramerateTimer.setInterval(1000);
     connect(&mGetRuntimeFramerateTimer, &QTimer::timeout, this, &Widget::slotRefreshFramerate);
+
+    connect(&mAsyncFlowrateCalculator, &AsyncFlowrateCalculator::signalUpdateSharpness,this, &Widget::slotCalcSharpness, Qt::QueuedConnection);
 
     mRecordTimeLimitTimer.setInterval(60 * 60 * 1000);
     mRecordTimeLimitTimer.setSingleShot(true);
@@ -127,11 +130,13 @@ void Widget::beginCapture()
         if (mPixelByteCount == 1)
         {
             mRecvImage = QImage(mFrameWidth, mFrameHeight, QImage::Format::Format_Grayscale8);
+            mAsyncFlowrateCalculator.setImageFormat(mRecvImage, mImageSize);
             mMat = cv::Mat(mFrameHeight, mFrameWidth, CV_8UC1);
         }
         else if (mPixelByteCount == 3)
         {
             mRecvImage = QImage(mFrameWidth, mFrameHeight, QImage::Format::Format_RGB888);
+            mAsyncFlowrateCalculator.setImageFormat(mRecvImage, mImageSize);
             mMat = cv::Mat(mFrameHeight, mFrameWidth, CV_8UC3);
         }
 
@@ -144,8 +149,9 @@ void Widget::beginCapture()
 
         mUsingCameraCaptureBeginDateTime = QDateTime::currentDateTime();
 
-        mDisplayTimer.start();
         mGetRuntimeFramerateTimer.start();
+
+        mAsyncFlowrateCalculator.startCalculate();
 
         mIsCameraCapturing = true;
     }
@@ -159,6 +165,8 @@ void Widget::stopCaptutre()
 
         mCommonFuncPtr = mLib.resolve("stopCapture");
         ((captureFunc*)mCommonFuncPtr)(mUsingCamera);
+
+        mAsyncFlowrateCalculator.stopCalculate();
 
         mCameraParamWidget->switchCameraUncapturingStyle();
 
@@ -257,6 +265,11 @@ void Widget::processOneFrame(const _Fake_Mat &m)
 
             updateRecordTime();
         }
+
+        if(mAsyncFlowrateCalculator.calculating())
+        {
+            mAsyncFlowrateCalculator.cache(mMat);
+        }
     }
 }
 
@@ -309,6 +322,7 @@ void Widget::paintEvent(QPaintEvent *e)
             arg(mCameraRunTime.hour(), 2, 10, QLatin1Char('0')).
             arg(mCameraRunTime.minute(), 2, 10, QLatin1Char('0')).
             arg(mCameraRunTime.second(), 2, 10, QLatin1Char('0')).arg(mCameraRunTime.msec(), 3, 10, QLatin1Char('0')));
+        mPainter.drawText(QPointF(20, 100), QString::number(mSharpness));
     }
 
     mPainter.end();
@@ -398,6 +412,11 @@ void Widget::slotRefreshFramerate()
     }
 }
 
+void Widget::slotCalcSharpness(double sharpness)
+{
+    mSharpness = sharpness;
+}
+
 void Widget::asyncUpdateAvaliableCameras()
 {
     if (mIsUpdatingCameraList)
@@ -420,6 +439,7 @@ void Widget::updateRecordTime()
     mRecordDuratiom = mRecordDuratiom.addMSecs(mRecordBeginDateTime.msecsTo(QDateTime::currentDateTime()));
 }
 
+/**********AsyncVideoRecorder**********/
 AsyncVideoRecorder::AsyncVideoRecorder(cv::VideoWriter& videoWriter):
     mRecoring(false), mVideoWriter(videoWriter), mCacheIndex(0), mWriteIndex(0)
 {
@@ -520,3 +540,115 @@ void AsyncVideoRecorder::run()
     mVideoWriter.release();
     qDebug() << "mVideoWtirer.release()";
 }
+/**********AsyncVideoRecorder**********/
+
+/**********AsyncFlowrateCalculator**********/
+AsyncFlowrateCalculator::AsyncFlowrateCalculator() :
+    mImageSize(0), mCalculating(false), mCacheIndex(0), mCalculateIndex(0)
+{
+    mCacheQueue.resize(2048);
+    mOccupied.resize(2048, false);
+}
+
+AsyncFlowrateCalculator::~AsyncFlowrateCalculator()
+{
+
+}
+
+void AsyncFlowrateCalculator::setImageFormat(const QImage &image, int imageSize)
+{
+    mCalculateImage = image;
+    mImageSize = imageSize;
+}
+
+void AsyncFlowrateCalculator::startCalculate()
+{
+    auto lambdaSlotCheckRecordFinish = [&](){
+        if (this->isRunning() && mCalculating)
+        {
+            QTimer::singleShot(0, &mEventLoop, &QEventLoop::quit);
+        }
+    };
+
+    QTimer timerCheckRecordFinish;
+    connect(&timerCheckRecordFinish, &QTimer::timeout, lambdaSlotCheckRecordFinish);
+
+    this->start();
+    timerCheckRecordFinish.start(10);
+    mEventLoop.exec();
+}
+
+bool AsyncFlowrateCalculator::calculating()
+{
+    return mCalculating;
+}
+
+void AsyncFlowrateCalculator::stopCalculate()
+{
+    auto lambdaSlotCheckRecordFinish = [&](){
+        if (!this->isRunning())
+        {
+            mCacheIndex = 0;
+            mCalculateIndex = 0;
+            mOccupied.resize(2048, false);
+            this->quit();
+            QTimer::singleShot(0, &mEventLoop, &QEventLoop::quit);
+        }
+    };
+
+    QTimer timerCheckRecordFinish;
+    connect(&timerCheckRecordFinish, &QTimer::timeout, lambdaSlotCheckRecordFinish);
+
+    mCalculating = false;
+    timerCheckRecordFinish.start(10);
+    mEventLoop.exec();
+}
+
+void AsyncFlowrateCalculator::cache(const cv::Mat &mat)
+{
+    lock _lock;
+
+    if (mOccupied[mCacheIndex])
+    {
+        return;
+    }
+
+    mCacheQueue[mCacheIndex] = mat;
+    mOccupied[mCacheIndex++] = true;
+
+    if (mCacheIndex == 2048)
+    {
+        mCacheIndex = 0;
+    }
+}
+
+void AsyncFlowrateCalculator::run()
+{
+    QImage image;
+
+    mCalculating = true;
+    while (true)
+    {
+        if (mOccupied[mCalculateIndex])
+        {
+            lock _lock;
+            const cv::Mat& writeMat = mCacheQueue[mCalculateIndex];
+            memcpy(mCalculateImage.bits(), writeMat.data, mImageSize);
+
+            double shaprness = Flowrate::GetImageSharpness(mCalculateImage);
+            emit signalUpdateSharpness(shaprness);
+
+            mOccupied[mCalculateIndex++] = false;
+
+            if (mCalculateIndex == 2048)
+            {
+                mCalculateIndex = 0;
+            }
+        }
+        else if (!mCalculating)
+        {
+            break;
+        }
+    }
+}
+/**********AsyncFlowrateCalculator**********/
