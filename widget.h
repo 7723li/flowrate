@@ -172,6 +172,8 @@ private slots:
 
     void slotCalcSharpness(double sharpness);
 
+    void slotAutoRecordChecked(int status);
+
 private:
     inline void asyncUpdateAvaliableCameras();
 
@@ -227,4 +229,7 @@ private:
 
     AsyncFlowrateCalculator mAsyncFlowrateCalculator;   // 异步计算图像清晰度 后续拓展成异步计算流速
     double mSharpness;                              // 清晰度
+    int mContinueSharpFrameCount;                   // 连续清晰的帧数
+
+    QTimer mAutoRecordTimeLimitTimer;               // 智能录制时长显示定时器 1000ms
 };

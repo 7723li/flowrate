@@ -1,19 +1,19 @@
 ﻿#include "flowrate.h"
 
-double Flowrate::calFlowrate(QImage imagePrev, QImage imageRear)
+double Flowrate::calFlowTrackAreas(QImage imagePrev, QImage imageRear)
 {
-    return calFlowrate(QVector<QImage>::fromStdVector(std::vector<QImage>({imagePrev, imageRear}))).front();
+    return calFlowTrackAreas(QVector<QImage>::fromStdVector(std::vector<QImage>({imagePrev, imageRear}))).front();
 }
 
-QVector<double> Flowrate::calFlowrate(const QVector<QImage>& imagelist)
+QVector<double> Flowrate::calFlowTrackAreas(const QVector<QImage>& imagelist)
 {
     if(imagelist.size() < 2)
     {
         return QVector<double>();
     }
 
-    HObject  ImagePrev, ImagePrevGauss, RegionUnionPrev;
-    HObject  ImageRear, ImageRearGauss, RegionUnionRear;
+    HObject  ImagePrevGauss, RegionConnectedPrev, RegionUnionPrev;
+    HObject  ImageRearGauss, RegionConnectedRear, RegionUnionRear;
     HObject  RegionDifference, Line, RegionIntersection;
     HObject  ConnectedRegions, RegionUnionRearTrans, RegionIntersect;
     HObject  ImageRearGaussTrans, RegionUnionPrevRear;
@@ -22,19 +22,19 @@ QVector<double> Flowrate::calFlowrate(const QVector<QImage>& imagelist)
     HObject  RegionCellTrack, ImagePrevCalRegionInvert;
     HObject  ImageRearCalRegionInvert, ImageCellTrackRegion, ImageMean;
 
-    HTuple  hv_AreaRegionUnionPrev, hv_useless, hv_AreaRegionUnionRear;
-    HTuple  hv_dis_Row, hv_AreaRow, hv_dis_Col, hv_AreaCol;
-    HTuple  hv_maxRowDis, hv_deviationRowDis, hv_maxColDis;
-    HTuple  hv_deviationColDis, hv_maxIntersectAreaRow, hv_maxIntersectAreaCol;
-    HTuple  hv_maxIntersectArea, hv_HomMat2D;
-    HTuple  hv_AreaRegionIntersect, hv_RowRegionIntersect, hv_ColumnRegionIntersect;
-    HTuple  hv_RegionCellTracksArea, hv_RegionCellTracksRow;
-    HTuple  hv_RegionCellTracksColumn;
+    HTuple  AreaRegionUnionPrev, useless, AreaRegionUnionRear;
+    HTuple  dis_Row, AreaRow, dis_Col, AreaCol;
+    HTuple  maxRowDis, deviationRowDis, maxColDis;
+    HTuple  deviationColDis, maxIntersectAreaRow, maxIntersectAreaCol;
+    HTuple  maxIntersectArea, HomMat2D;
+    HTuple  AreaRegionIntersect, RowRegionIntersect, ColumnRegionIntersect;
+    HTuple  RegionCellTracksArea, RegionCellTracksRow;
+    HTuple  RegionCellTracksColumn;
 
-    QVector<double> flowrates(imagelist.size(), 0);
+    QVector<double> flowTrackAreas(imagelist.size(), 0);
 
     //首帧预处理 对应的变量用在后续的后帧缓存
-    PreProcess(imagelist[0], &ImagePrev, &ImagePrevGauss, &RegionUnionPrev);
+    preProcess(imagelist[0], &ImagePrevGauss, &RegionConnectedPrev, &RegionUnionPrev);
 
     //遍历图像序列
     int imageCount = imagelist.size();
@@ -45,21 +45,21 @@ QVector<double> Flowrate::calFlowrate(const QVector<QImage>& imagelist)
         int width = imageRear.width(), height = imageRear.height();
 
         //前帧血管区域判空 若为空 next one
-        AreaCenter(RegionUnionPrev, &hv_AreaRegionUnionPrev, &hv_useless, &hv_useless);
-        if (hv_AreaRegionUnionPrev.TupleLength() == 0 || -1 == hv_AreaRegionUnionPrev)
+        AreaCenter(RegionUnionPrev, &AreaRegionUnionPrev, &useless, &useless);
+        if (AreaRegionUnionPrev.TupleLength() == 0 || -1 == AreaRegionUnionPrev)
         {
-            PreProcess(imageRear, &ImagePrev, &ImagePrevGauss, &RegionUnionPrev);
+            preProcess(imageRear, &ImagePrevGauss, &RegionConnectedPrev, &RegionUnionPrev);
             continue;
         }
 
         //后一帧预处理
-        PreProcess(imageRear, &ImageRear, &ImageRearGauss, &RegionUnionRear);
+        preProcess(imageRear, &ImageRearGauss, &RegionConnectedRear, &RegionUnionRear);
 
         //后帧血管区域判空 若为空 next one
-        AreaCenter(RegionUnionRear, &hv_AreaRegionUnionRear, &hv_useless, &hv_useless);
-        if (hv_AreaRegionUnionRear.TupleLength() ==0 || -1 == hv_AreaRegionUnionRear)
+        AreaCenter(RegionUnionRear, &AreaRegionUnionRear, &useless, &useless);
+        if (AreaRegionUnionRear.TupleLength() ==0 || -1 == AreaRegionUnionRear)
         {
-            PreProcess(imagelist[++i], &ImagePrev, &ImagePrevGauss, &RegionUnionPrev);
+            preProcess(imagelist[++i], &ImagePrevGauss, &RegionConnectedPrev, &RegionUnionPrev);
             continue;
         }
 
@@ -67,55 +67,55 @@ QVector<double> Flowrate::calFlowrate(const QVector<QImage>& imagelist)
         Difference(RegionUnionPrev, RegionUnionRear, &RegionDifference);
 
         //计算差异区域在各行的宽度
-        hv_dis_Row = HTuple();
+        dis_Row = HTuple();
         for (int j = 0; j < height - 1; ++j)
         {
             GenRegionLine(&Line, j, 0, j, width - 1);
             Intersection(Line, RegionDifference, &RegionIntersection);
             Connection(RegionIntersection, &ConnectedRegions);
-            AreaCenter(ConnectedRegions, &hv_AreaRow, &hv_useless, &hv_useless);
-            hv_dis_Row = hv_dis_Row.TupleConcat(hv_AreaRow);
+            AreaCenter(ConnectedRegions, &AreaRow, &useless, &useless);
+            dis_Row = dis_Row.TupleConcat(AreaRow);
         }
 
         //计算差异区域在各列的高度
-        hv_dis_Col = HTuple();
+        dis_Col = HTuple();
         for (int j = 0; j < height - 1; ++j)
         {
             GenRegionLine(&Line, 0, j, height - 1, j);
             Intersection(Line, RegionDifference, &RegionIntersection);
             Connection(RegionIntersection, &ConnectedRegions);
-            AreaCenter(ConnectedRegions, &hv_AreaCol, &hv_useless, &hv_useless);
-            hv_dis_Col = hv_dis_Col.TupleConcat(hv_AreaCol);
+            AreaCenter(ConnectedRegions, &AreaCol, &useless, &useless);
+            dis_Col = dis_Col.TupleConcat(AreaCol);
         }
 
         //最大距离的正负作为粗瞄范围 方差作为步进粗瞄距离
-        TupleMax(hv_dis_Row, &hv_maxRowDis);
-        TupleDeviation(hv_dis_Row, &hv_deviationRowDis);
-        TupleMax(hv_dis_Col, &hv_maxColDis);
-        TupleDeviation(hv_dis_Col, &hv_deviationColDis);
+        TupleMax(dis_Row, &maxRowDis);
+        TupleDeviation(dis_Row, &deviationRowDis);
+        TupleMax(dis_Col, &maxColDis);
+        TupleDeviation(dis_Col, &deviationColDis);
 
         //粗瞄 找出一个横向移动后 能使前后帧血管区域重叠面积最大的差异区域高度 减少后面防抖移动的次数
         //插值方式采用比较粗糙的nearest_neighbor即可 后面浮点数处再采用比较精准的插值方法
-        hv_maxIntersectAreaRow = 0;
-        hv_maxIntersectAreaCol = 0;
-        hv_maxIntersectArea = 0;
+        maxIntersectAreaRow = 0;
+        maxIntersectAreaCol = 0;
+        maxIntersectArea = 0;
 
-        double steprow = hv_deviationRowDis.D(), stepcol = hv_deviationColDis.D();
-        for (double row = -hv_maxRowDis; row <= hv_maxRowDis; row += steprow)
+        double steprow = deviationRowDis.D(), stepcol = deviationColDis.D();
+        for (double row = -maxRowDis; row <= maxRowDis; row += steprow)
         {
-            for (double col = -hv_maxColDis; col <= hv_maxColDis; col += stepcol)
+            for (double col = -maxColDis; col <= maxColDis; col += stepcol)
             {
-                HomMat2dIdentity(&hv_HomMat2D);
-                HomMat2dTranslate(hv_HomMat2D, row, col, &hv_HomMat2D);
-                AffineTransRegion(RegionUnionRear, &RegionUnionRearTrans, hv_HomMat2D, "nearest_neighbor");
+                HomMat2dIdentity(&HomMat2D);
+                HomMat2dTranslate(HomMat2D, row, col, &HomMat2D);
+                AffineTransRegion(RegionUnionRear, &RegionUnionRearTrans, HomMat2D, "nearest_neighbor");
 
                 Intersection(RegionUnionPrev, RegionUnionRearTrans, &RegionIntersect);
-                AreaCenter(RegionIntersect, &hv_AreaRegionIntersect, &hv_RowRegionIntersect, &hv_ColumnRegionIntersect);
-                if (hv_AreaRegionIntersect > hv_maxIntersectArea)
+                AreaCenter(RegionIntersect, &AreaRegionIntersect, &RowRegionIntersect, &ColumnRegionIntersect);
+                if (AreaRegionIntersect > maxIntersectArea)
                 {
-                    hv_maxIntersectArea = hv_AreaRegionIntersect;
-                    hv_maxIntersectAreaRow = row;
-                    hv_maxIntersectAreaCol = col;
+                    maxIntersectArea = AreaRegionIntersect;
+                    maxIntersectAreaRow = row;
+                    maxIntersectAreaCol = col;
                 }
             }
         }
@@ -126,40 +126,43 @@ QVector<double> Flowrate::calFlowrate(const QVector<QImage>& imagelist)
         {
             for (double x = -2.56; x <= 2.56; x += 0.16)
             {
-                HomMat2dIdentity(&hv_HomMat2D);
-                HomMat2dTranslate(hv_HomMat2D, hv_maxIntersectAreaRow, hv_maxIntersectAreaCol + x, &hv_HomMat2D);
-                AffineTransRegion(RegionUnionRear, &RegionUnionRearTrans, hv_HomMat2D, "constant");
+                HomMat2dIdentity(&HomMat2D);
+                HomMat2dTranslate(HomMat2D, maxIntersectAreaRow, maxIntersectAreaCol + x, &HomMat2D);
+                AffineTransRegion(RegionUnionRear, &RegionUnionRearTrans, HomMat2D, "constant");
 
                 Intersection(RegionUnionPrev, RegionUnionRearTrans, &RegionIntersect);
-                AreaCenter(RegionIntersect, &hv_AreaRegionIntersect, &hv_RowRegionIntersect, &hv_ColumnRegionIntersect);
-                if (hv_AreaRegionIntersect > hv_maxIntersectArea)
+                AreaCenter(RegionIntersect, &AreaRegionIntersect, &RowRegionIntersect, &ColumnRegionIntersect);
+                if (AreaRegionIntersect > maxIntersectArea)
                 {
-                    hv_maxIntersectArea = hv_AreaRegionIntersect;
-                    hv_maxIntersectAreaCol = hv_maxIntersectAreaCol + x;
+                    maxIntersectArea = AreaRegionIntersect;
+                    maxIntersectAreaCol = maxIntersectAreaCol + x;
                 }
             }
 
             for (double y = -2.56; y <= 2.56; y += 0.16)
             {
-                HomMat2dIdentity(&hv_HomMat2D);
-                HomMat2dTranslate(hv_HomMat2D, hv_maxIntersectAreaRow + y, hv_maxIntersectAreaCol, &hv_HomMat2D);
-                AffineTransRegion(RegionUnionRear, &RegionUnionRearTrans, hv_HomMat2D, "constant");
+                HomMat2dIdentity(&HomMat2D);
+                HomMat2dTranslate(HomMat2D, maxIntersectAreaRow + y, maxIntersectAreaCol, &HomMat2D);
+                AffineTransRegion(RegionUnionRear, &RegionUnionRearTrans, HomMat2D, "constant");
 
                 Intersection(RegionUnionPrev, RegionUnionRearTrans, &RegionIntersect);
-                AreaCenter(RegionIntersect, &hv_AreaRegionIntersect, &hv_RowRegionIntersect, &hv_ColumnRegionIntersect);
-                if (hv_AreaRegionIntersect > hv_maxIntersectArea)
+                AreaCenter(RegionIntersect, &AreaRegionIntersect, &RowRegionIntersect, &ColumnRegionIntersect);
+                if (AreaRegionIntersect > maxIntersectArea)
                 {
-                    hv_maxIntersectArea = hv_AreaRegionIntersect;
-                    hv_maxIntersectAreaRow = hv_maxIntersectAreaRow + y;
+                    maxIntersectArea = AreaRegionIntersect;
+                    maxIntersectAreaRow = maxIntersectAreaRow + y;
                 }
             }
         }
 
-        HomMat2dIdentity(&hv_HomMat2D);
-        HomMat2dTranslate(hv_HomMat2D, hv_maxIntersectAreaRow, hv_maxIntersectAreaCol, &hv_HomMat2D);
-        AffineTransRegion(RegionUnionRear, &RegionUnionRearTrans, hv_HomMat2D, "constant");
-        AffineTransImage(ImageRearGauss, &ImageRearGaussTrans, hv_HomMat2D, "constant", "false");
+        // 最终找到 后帧对前帧的最佳移动位置
+        HomMat2dIdentity(&HomMat2D);
+        HomMat2dTranslate(HomMat2D, maxIntersectAreaRow, maxIntersectAreaCol, &HomMat2D);
+        AffineTransRegion(RegionUnionRear, &RegionUnionRearTrans, HomMat2D, "constant");
+        AffineTransImage(ImageRearGauss, &ImageRearGaussTrans, HomMat2D, "constant", "false");
 
+        // 合并前后帧血管区域 形成一个膨胀的、前后血管区域兼备的ROI
+        // 并计算连通区域 得到最终的ROI区域
         Union2(RegionUnionPrev, RegionUnionRearTrans, &RegionUnionPrevRear);
 
         //计算前后两帧的区别
@@ -189,81 +192,201 @@ QVector<double> Flowrate::calFlowrate(const QVector<QImage>& imagelist)
         //令 红细胞流速(mm/ms) = 流动轨迹面积(px) * 像素尺寸(mm/px) / 放大倍率 / 前后帧时间差(ms)
         //以大恒为例 若算出AB帧之间轨迹面积为1000px 像素尺寸为常量5.6um/px 放大倍率为常量5 帧率为常量30fps
         //则AB帧之间的流速为 1000 * (5.6/1000) / 5 / (1000/30) = 5.6 / 5 / 1000 * 30 = 0.0336mm/ms
-        AreaCenter(RegionCellTrack, &hv_RegionCellTracksArea, &hv_RegionCellTracksRow, &hv_RegionCellTracksColumn);
-        flowrates[i - 1] = hv_RegionCellTracksArea.D();
+        AreaCenter(RegionCellTrack, &RegionCellTracksArea, &RegionCellTracksRow, &RegionCellTracksColumn);
+        flowTrackAreas[i - 1] = RegionCellTracksArea.D();
 
         //后帧变前帧
-        ImagePrev = ImageRear;
         ImagePrevGauss = ImageRearGauss;
         RegionUnionPrev = RegionUnionRear;
     }
 
-    return flowrates;
+    return flowTrackAreas;
 }
 
-double Flowrate::GetImageSharpness(const QImage &Image)
+double Flowrate::getImageSharpness(const QImage &Image)
 {
-    HTuple sharpness = 0.0;
-    HObject ImageOri, ImageGuass, RegionUnion;
-    HObject ImageReduced, EdgeAmplitude, Rect;
-    HObject Edges;
-    HTuple Min, Max, Range, Length, AreaRegionUnion, useless, Sum;
+    double sharpness = 0.0;
+    HObject BorderRegionUnion, ImageGauss, RegionConnected, RegionUnion;
+    HObject ImageGaussEquHisto, ImaAmp, ImaDir, ImageMean, BorderEdges;
 
-    PreProcess(Image, &ImageOri, &ImageGuass, &RegionUnion);
+    HTuple AreaBorderRegionUnion, AreaBorderEdges, useless;
 
-    ReduceDomain(ImageGuass, RegionUnion, &ImageReduced);
+    // 预处理函数中使用了均值滤波+动态阈值的方法获取连续的低灰度区域 可认为这些区域都是血管区域
+    preProcess(Image, &ImageGauss, &RegionConnected, &RegionUnion);
 
-    SobelAmp(ImageReduced, &EdgeAmplitude, "sum_abs", 7);
+    // 血管区域的外轮廓
+    Boundary(RegionUnion, &BorderRegionUnion, "inner");
 
-    GenRectangle1(&Rect, 0, 0, Image.height(), Image.width());
-    MinMaxGray(Rect, EdgeAmplitude, 0, &Min, &Max, &Range);
+    // 通用方法获取图像边缘区域
+    EquHistoImage(ImageGauss, &ImageGaussEquHisto);
+    EdgesImage(ImageGaussEquHisto, &ImaAmp, &ImaDir, "canny", 1, "nms", -1, -1);
+    MeanImage(ImaAmp, &ImageMean, 23, 23);
+    DynThreshold(ImaAmp, ImageMean, &BorderEdges, 5, "light");
 
-    if(0 == Min)
+    // 计算 血管区域外轮廓的周长 以及 边缘区域长度
+    AreaCenter(BorderRegionUnion, &AreaBorderRegionUnion, &useless, &useless);
+    AreaCenter(BorderEdges, &AreaBorderEdges, &useless, &useless);
+
+    // 理论上来说 在理想情况下 当一幅图像足够清晰时 其轮廓周长(A)与边缘长度(B)应该相等 即A / B = 1 比如一个线宽为1的黑框白色正方形
+    // 经过几个数据集实验 此处清晰度取值范围为[0.91, 1.195)
+    if(AreaBorderRegionUnion.TupleLength() == 1 && AreaBorderEdges.TupleLength() == 1 && AreaBorderRegionUnion > 0)
     {
-        Min = 1;
+        sharpness = AreaBorderEdges.D() / AreaBorderRegionUnion.D();
     }
-    else if(Min > 5)
+    else
     {
-        Min = 5;
-    }
-
-    EdgesSubPix(EdgeAmplitude, &Edges, "canny", 1, Min, 5);
-
-    LengthXld(Edges, &Length);
-    if(Length.TupleLength() > 0)
-    {
-        AreaCenter(RegionUnion, &AreaRegionUnion, &useless, &useless);
-        if(AreaRegionUnion > 0)
-        {
-            TupleSum(Length, &Sum);
-            sharpness = Sum / AreaRegionUnion;
-        }
+        sharpness = 0;
     }
 
     return sharpness;
 }
 
-void Flowrate::PreProcess(const QImage& image, HObject* Image, HObject *ImageGauss, HObject *RegionUnion)
+bool Flowrate::isSharp(double sharpness)
 {
-    HObject  ImageMean, RegionDynThresh, ConnectedRegions;
-    HObject  SelectedRegions;
+    return (sharpness >= 0.91 && sharpness < 1.195);
+}
 
-    HTuple  hv_Channels;
+void Flowrate::splitVesselRegion(const QImage &image, const HObject &ImageGauss, const HObject &RegionConnected, HObject *RegionBranchs, HObject *RegionNodes)
+{
+    HObject NeedSplitRegions, UnionNeedSplitRegions, skeleton;
+    HObject EndPoints, JuncPoints;
+    HObject ImageReduced, ImageEquHisto, Basins, watersheds;
+    HObject UnionRegionBranchBlocks, UnionRegionNodeBlocks;
+    HObject ObjectSelected, RegionIntersection;
+    HObject UnionRegionRawBranchs, RegionRawBranchs, RegionRawNodes;
+    HObject BorderNeedSplitRegions, Circles, RegionBranchsMergeWithNodes;
+    HObject Circle, Node, RawBranch, RegionIntersectionCN, RegionIntersectionCB;
+    HObject RegionNotMergeBranchs, ConnectedBranchsMergeWithNodes, ConnectedNotMergeBranchs;
+    HObject UnionRegionBranchs, UnionRegionNodes;
 
-    GenImage1(Image, "byte", image.width(), image.height(), (Hlong)image.bits());
+    HTuple Number, Area123, useless;
+    HTuple NumberRegionRawBranchs,NumbeRegionNodes;
+    HTuple RowsJuncPoints, ColsJuncPoints, DistanceMin, DistanceMax;
+    HTuple AreaCircle, AreaRegionIntersectionCN, AreaRegionIntersectionCB;
 
-    GaussFilter(*Image, ImageGauss, 7);
+    // 面积大于4000px的血管区域才进行分割
+    SelectShape(RegionConnected, &NeedSplitRegions, "area", "and", 4000, image.width() * image.height());
+    Union1(NeedSplitRegions, &UnionNeedSplitRegions);
 
-    //寻找血管线 均值滤波+动态阈值
+    // 求血管区域骨骼(Skeleton)及其分叉点(JuncPoints) 端点(EndPoints)没用
+    // 注意：骨骼，即中心线
+    Skeleton(UnionNeedSplitRegions, &skeleton);
+    JunctionsSkeleton(skeleton, &EndPoints, &JuncPoints);
+
+    // 分水岭算法 根据连续的灰度等级将需要分割的区域若干块(Basins) 顺便得到分割区域的分割线(Watersheds)
+    ReduceDomain(ImageGauss, UnionNeedSplitRegions, &ImageReduced);
+    EquHistoImage(ImageReduced, &ImageEquHisto);
+    Watersheds(ImageEquHisto, &Basins, &watersheds);
+
+    // 遍历Basins的每个区域块(A) 若A中包含至少一个属于JuncPoints的分叉点(B) 块(block)
+    // 则认为A属于血管区域的结点区域(Node) 否则属于分支区域(Branch)
+    // 注意：参考二叉树结构 分为树和子树 再分为结点和叶 此处不叫"叶"叫"分支"比较形象
+    CountObj(Basins, &Number);
+    int number = Number.I();
+    for (int i = 1; i <= number; ++i)
+    {
+        SelectObj(Basins, &ObjectSelected, i);
+        Intersection(ObjectSelected, JuncPoints, &RegionIntersection);
+        AreaCenter(RegionIntersection, &Area123, &useless, &useless);
+        if(Area123 < 1)
+        {
+            Union2(UnionRegionBranchBlocks, ObjectSelected, &UnionRegionBranchBlocks);
+        }
+        else
+        {
+            Union2(UnionRegionNodeBlocks, ObjectSelected, &UnionRegionNodeBlocks);
+        }
+    }
+
+    // 合并分支区域(Branch)和分割线(Watersheds) 得到完整的原始(Raw)分支区域
+    // 注意：之所以叫原始区域 是因为这里会有一些依然孤立的或者突兀在分支边缘的分割线 但这里先不处理
+    Union2(UnionRegionBranchBlocks, watersheds, &UnionRegionRawBranchs);
+    Connection(UnionRegionRawBranchs, &RegionRawBranchs);
+    CountObj(RegionRawBranchs, &NumberRegionRawBranchs);
+
+    // 原始结点区域集合
+    Connection(UnionRegionNodeBlocks, &RegionRawNodes);
+    CountObj(RegionRawNodes, &NumbeRegionNodes);
+
+    // 需要分割的血管区域的外边界(BorderNeedSplitRegions)
+    Boundary(UnionNeedSplitRegions, &BorderNeedSplitRegions, "inner");
+
+    // 以JuncPoints中的各个交叉点为圆点 以JuncPoints中的各个交叉点到BorderNeedSplitRegions的最小距离为半径 作若干个圆(Circles)
+    GetRegionPoints(JuncPoints, &RowsJuncPoints, &ColsJuncPoints);
+    DistancePr(BorderNeedSplitRegions, RowsJuncPoints, ColsJuncPoints, &DistanceMin, &DistanceMax);
+    GenCircle(&Circles, RowsJuncPoints, ColsJuncPoints, DistanceMin);
+
+    // 遍历Circles中的所有圆(A) A的圆点在结点区域内 因此圆A必然和至少1个结点区域(B)相交
+    // 若A还能与若干个原始分支区域(C)相交 且相交面积达到圆面积的1/10 则可认为B和C是可连接起来的
+    // 注意：此步骤的理论支撑大概就是 交叉点跟外边界的最小距离内的所有接触区域集合
+    int rowsJuncPoints = RowsJuncPoints.I(), numbeRegionNodes = NumbeRegionNodes.I(), numberRegionRawBranchs = NumberRegionRawBranchs.I();
+    for(int i = 1; i <= rowsJuncPoints; ++i)
+    {
+        SelectObj(Circles, &Circle, i);
+        AreaCenter(Circle, &AreaCircle, &useless, &useless);
+        for(int j = 1; j <= numbeRegionNodes; ++j)
+        {
+            SelectObj(RegionRawNodes, &Node, j);
+            Intersection(Circle, Node, &RegionIntersectionCN);
+            AreaCenter(RegionIntersectionCN, &AreaRegionIntersectionCN, &useless, &useless);
+            if(AreaRegionIntersectionCN.TupleLength() == 1 && AreaRegionIntersectionCN > 0)
+            {
+                for(int k = 1; k <= numberRegionRawBranchs; ++k)
+                {
+                    SelectObj(RegionRawBranchs, &RawBranch, k);
+                    Intersection(Circle, RawBranch, &RegionIntersectionCB);
+                    AreaCenter(RegionIntersectionCB, &AreaRegionIntersectionCB, &useless, &useless);
+                    if(AreaRegionIntersectionCB.TupleLength() == 1 && AreaRegionIntersectionCB > 0)
+                    {
+                        Union2(RegionBranchsMergeWithNodes, Node, &RegionBranchsMergeWithNodes);
+                        Union2(RegionBranchsMergeWithNodes, RawBranch, &RegionBranchsMergeWithNodes);\
+                    }
+                }
+            }
+        }
+    }
+
+    // 没有与结点结合的分支
+    Difference(UnionRegionRawBranchs, RegionBranchsMergeWithNodes, &RegionNotMergeBranchs);
+
+    // 注意 上面说过的孤立或者突兀的分割线 在下述两步中通过区域合并和分割 会十分自然的被处理掉 且可以保证区域的面积从始至终没有改变过
+
+    // 最终得到的完整分支区域
+    Connection(RegionBranchsMergeWithNodes, &ConnectedBranchsMergeWithNodes);
+    Connection(RegionNotMergeBranchs, &ConnectedNotMergeBranchs);
+    ConcatObj(ConnectedBranchsMergeWithNodes, ConnectedNotMergeBranchs, RegionBranchs);
+
+    // 最终得到的完整结点区域
+    Union1(*RegionBranchs, &UnionRegionBranchs);
+    Difference(UnionNeedSplitRegions, UnionRegionBranchs, &UnionRegionNodes);
+    Connection(UnionRegionNodes, RegionNodes);
+}
+
+void Flowrate::preProcess(const QImage& image, HObject *ImageGauss, HObject *RegionConnected, HObject *RegionUnion)
+{
+    HObject  ImageOri, ImageMean, RegionDynThresh, RegionClosing, RawRegionConnected;
+
+    HTuple  Channels;
+
+    // 使用GenImage1将QImage的图像数据复制到HObject
+    // 这里确保了QImage是单通道灰度图 因此hdev中原程序的格式转换步骤都可以忽略
+    GenImage1(&ImageOri, "byte", image.width(), image.height(), (Hlong)image.bits());
+
+    GaussFilter(ImageOri, ImageGauss, 7);
+
+    // 寻找血管线 均值滤波+动态阈值
     MeanImage(*ImageGauss, &ImageMean, 43, 43);
     DynThreshold(*ImageGauss, ImageMean, &RegionDynThresh, 5, "dark");
 
-    //分散出若干个连接起来的区域 大部分大概率是血管区域
-    Connection(RegionDynThresh, &ConnectedRegions);
+    // 闭运算补小洞
+    ClosingCircle(RegionDynThresh, &RegionClosing, 3);
 
-    //根据面积筛选掉噪音
-    SelectShape(ConnectedRegions, &SelectedRegions, "area", "and", 50, image.width() * image.height());
+    // 分散出若干个连接起来的区域 大部分大概率是血管区域
+    Connection(RegionClosing, &RawRegionConnected);
 
-    //合并 检测到的分散血管区域 后面有用
-    Union1(SelectedRegions, &(*RegionUnion));
+    // 根据面积筛选掉噪音
+    SelectShape(RawRegionConnected, RegionConnected, "area", "and", 50, image.width() * image.height());
+
+    // 合并 检测到的分散血管区域 后面有用
+    Union1(*RegionConnected, RegionUnion);
 }

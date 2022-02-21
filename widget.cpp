@@ -5,7 +5,7 @@ Widget::Widget(QWidget *parent)
     mUsingCamera(nullptr), mIsCameraOpen(false), mIsCameraCapturing(false),
     mLib("GenericCameraModule.dll"), mCommonFuncPtr(nullptr), mRuntimeFramerateFuncPtr(nullptr), mCameraParamWidget(new CameraParamWidget(mLib)),
     mFrameWidth(0), mFrameHeight(0), mPixelByteCount(0), mImageSize(0), mVideoRecorder(new AsyncVideoRecorder(mVideoWriter)), mConfigFramerate(0.0), mRunningFramerate(0.0),
-    mLastSecondRecvFrameCount(0), mLastSecondRecvFrameCountDisplay(0), mIsUpdatingCameraList(false), mShowDebugMessage(true), mSharpness(0.0)
+    mLastSecondRecvFrameCount(0), mLastSecondRecvFrameCountDisplay(0), mIsUpdatingCameraList(false), mShowDebugMessage(true), mSharpness(0.0), mContinueSharpFrameCount(0)
 {
     qDebug() << "lib.load GenericCameraModule.dll" << mLib.load();
 
@@ -14,6 +14,7 @@ Widget::Widget(QWidget *parent)
     mUI.begin_record_btn->setEnabled(false);
     connect(mUI.begin_record_btn, &QPushButton::clicked, this, &Widget::beginRecord);
     connect(mUI.stop_record_btn, &QPushButton::clicked, this, &Widget::stopRecord);
+    connect(mUI.checkBoxAutoRecord, &QCheckBox::stateChanged, this, &Widget::slotAutoRecordChecked);
 
     connect(mCameraParamWidget, &CameraParamWidget::signalOpenCamera, this, &Widget::openCamera);
     connect(mCameraParamWidget, &CameraParamWidget::signalCloseCamera, this, &Widget::closeCamera);
@@ -35,6 +36,10 @@ Widget::Widget(QWidget *parent)
     mRecordTimeLimitTimer.setInterval(60 * 60 * 1000);
     mRecordTimeLimitTimer.setSingleShot(true);
     connect(&mRecordTimeLimitTimer, &QTimer::timeout, this, &Widget::stopRecord);
+
+    mAutoRecordTimeLimitTimer.setInterval(1000);
+    mAutoRecordTimeLimitTimer.setSingleShot(true);
+    connect(&mAutoRecordTimeLimitTimer, &QTimer::timeout, this, &Widget::stopRecord);
 
     QTimer::singleShot(1000, this, &Widget::slotInitOpenCamera);
 }
@@ -228,9 +233,14 @@ void Widget::beginRecord()
     {
         mVideoRecorder->startRecord();
 
+
         mRecordBeginDateTime = QDateTime::currentDateTime();
 
-        mUI.begin_stop_record_stack->setCurrentWidget(mUI.page_stop_record_btn);
+        if(!mUI.checkBoxAutoRecord->isChecked())
+        {
+            mUI.begin_stop_record_stack->setCurrentWidget(mUI.page_stop_record_btn);
+        }
+        mUI.checkBoxAutoRecord->setEnabled(false);
 
         mRecordTimeLimitTimer.start();
     }
@@ -238,7 +248,8 @@ void Widget::beginRecord()
 
 void Widget::stopRecord()
 {
-    int videoDuration = mRecordDuratiom.hour() * 3600 + mRecordDuratiom.minute() * 60 + mRecordDuratiom.second();
+    qDebug() << "Widget::stopRecord";
+
     if (!mVideoWriter.isOpened() || !mVideoRecorder->recording())
     {
         return;
@@ -248,7 +259,11 @@ void Widget::stopRecord()
 
     mRecordTimeLimitTimer.stop();
 
-    mUI.begin_stop_record_stack->setCurrentWidget(mUI.page_begin_record_btn);
+    if(!mUI.checkBoxAutoRecord->isChecked())
+    {
+        mUI.begin_stop_record_stack->setCurrentWidget(mUI.page_begin_record_btn);
+    }
+    mUI.checkBoxAutoRecord->setEnabled(true);
 }
 
 void Widget::processOneFrame(const _Fake_Mat &m)
@@ -277,7 +292,7 @@ void Widget::paintEvent(QPaintEvent *e)
 {
     e->accept();
 
-    if (!mPainter.begin(mUI.frame_displayer))
+    if (!this->isVisible() || !mPainter.begin(mUI.frame_displayer))
     {
         e->ignore();
         return;
@@ -322,7 +337,6 @@ void Widget::paintEvent(QPaintEvent *e)
             arg(mCameraRunTime.hour(), 2, 10, QLatin1Char('0')).
             arg(mCameraRunTime.minute(), 2, 10, QLatin1Char('0')).
             arg(mCameraRunTime.second(), 2, 10, QLatin1Char('0')).arg(mCameraRunTime.msec(), 3, 10, QLatin1Char('0')));
-        mPainter.drawText(QPointF(20, 100), QString::number(mSharpness));
     }
 
     mPainter.end();
@@ -353,7 +367,26 @@ void Widget::keyPressEvent(QKeyEvent *e)
 
 void Widget::closeEvent(QCloseEvent *e)
 {
+    mCameraParamWidget->close();
+    this->hide();
+
     closeCamera();
+
+    QEventLoop loop;
+    QTimer timer;
+    auto lambdaCheckUpdateCameraFinish = [&](){
+        if(!mIsUpdatingCameraList)
+        {
+            loop.quit();
+        }
+    };
+
+    if(mIsUpdatingCameraList)
+    {
+        connect(&timer, &QTimer::timeout, lambdaCheckUpdateCameraFinish);
+        timer.start(10);
+        loop.exec();
+    }
 
     qDebug() << "lib.unload CameraObject.dll" << mLib.unload();
 
@@ -375,7 +408,12 @@ void Widget::slotInitOpenCamera()
 
 void Widget::slotAfterUpdateAvaliableCameras(int cameraCount)
 {
-    if (cameraCount > 0 && mIsUpdatingCameraList)
+    if (!this->isVisible())
+    {
+        mIsUpdatingCameraList = false;
+        return;
+    }
+    else if (cameraCount > 0 && mIsUpdatingCameraList)
     {
         if (openCamera())
         {
@@ -414,12 +452,45 @@ void Widget::slotRefreshFramerate()
 
 void Widget::slotCalcSharpness(double sharpness)
 {
+    static const QString tips[] = {QStringLiteral("是"), QStringLiteral("否")};
+
     mSharpness = sharpness;
+    mUI.sharpness->setNum(mSharpness);
 
-    // 暂定清晰度阈值为0.167
-    if(mSharpness >= 0.167)
+    if(Flowrate::isSharp(mSharpness))
     {
+        mUI.isSharp->setText(tips[0]);
 
+        if(mUI.checkBoxAutoRecord->isChecked())
+        {
+            ++mContinueSharpFrameCount;
+            if(mContinueSharpFrameCount >= 10)
+            {
+                beginRecord();
+                mAutoRecordTimeLimitTimer.start();
+            }
+        }
+        else
+        {
+            mContinueSharpFrameCount = 0;
+        }
+    }
+    else
+    {
+        mUI.isSharp->setText(tips[1]);
+        mContinueSharpFrameCount = 0;
+    }
+}
+
+void Widget::slotAutoRecordChecked(int status)
+{
+    if(status == Qt::CheckState::Checked)
+    {
+        mUI.begin_stop_record_stack->setEnabled(false);
+    }
+    else
+    {
+        mUI.begin_stop_record_stack->setEnabled(true);
     }
 }
 
@@ -641,7 +712,7 @@ void AsyncFlowrateCalculator::run()
             const cv::Mat& writeMat = mCacheQueue[mCalculateIndex];
             memcpy(mCalculateImage.bits(), writeMat.data, mImageSize);
 
-            double shaprness = Flowrate::GetImageSharpness(mCalculateImage);
+            double shaprness = Flowrate::getImageSharpness(mCalculateImage);
             emit signalUpdateSharpness(shaprness);
 
             mOccupied[mCalculateIndex++] = false;

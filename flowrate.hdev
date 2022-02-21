@@ -3,60 +3,71 @@
 <procedure name="main">
 <interface/>
 <body>
-<c>* 注意</c>
-<c>* 清晰度算法另作函数get_image_sharpnessx单独调用 在内部调用了预处理函数pre_process </c>
-<c>* 合理清晰度暂定为0.167以上</c>
-<c>* 以下为使用demo</c>
+<c>***************************************清晰度BEGIN***************************************</c>
+<c>* 清晰度算法另作函数get_image_sharpnessx单独调用 在内部调用了自定义预处理函数pre_process </c>
+<c>* 合理清晰度暂定为[0.91, 1.195)</c>
+<c>* 以下为使用demo 测试集主要选用 V1001559 EV_PIC vh(栅格垂直水平) white</c>
+<l>* dev_update_off()</l>
 <l>* Sharpnesses := []</l>
-<l>* for I := 0 to 347 by 1</l>
-<l>*     get_image_sharpness (Image, 'D:/codes/PicAndTemplate/V1001559/', I, Sharpness)</l>
+<l>* for I := 0 to 540 by 1</l>
+<l>*     get_image_sharpness (Image, 'D:/codes/PicAndTemplate/white/', I$'04', Sharpness)</l>
 <l>*     Sharpnesses := [Sharpnesses, Sharpness]</l>
+<l>*     write_image(Image, 'png', 0, 'D:/codes/PicAndTemplate/white/Sharpness/' + I + '_'+ Sharpness + '.png')</l>
 <l>* endfor</l>
 <l>* tuple_sort(Sharpnesses, Sorted)</l>
 <l>* tuple_inverse(Sorted, Inverted)</l>
 <l>* tuple_sort_index(Sharpnesses, Indices)</l>
 <l>* tuple_inverse(Indices, Inverted1)</l>
+<c>***************************************清晰度END***************************************</c>
 <c></c>
-<c>***************************************新型防抖骗术BEGIN***************************************</c>
+<c>***************************************消抖+流动轨迹面积BEGIN***************************************</c>
 <l>Areas := []</l>
 <l>dev_update_off()</l>
 <c></c>
 <l>firstIndex := 0</l>
 <c></c>
 <c>* 首帧预处理 对应的变量用在后续的后帧缓存</c>
-<l>pre_process (ImagePrev, ImagePrevGauss, RegionUnionPrev, 'D:/codes/PicAndTemplate/EV_PIC/', firstIndex, Width, Height)</l>
+<l>pre_process (ImagePrev, ImagePrevGauss, RegionConnectedPrev, NeedSplitRegionsPrev, 'D:/codes/PicAndTemplate/EV_PIC/', firstIndex, Width, Height)</l>
 <c></c>
-<c>* TODO 血管分段</c>
-<l>* skeleton(RegionUnionPrev, Skeleton)</l>
-<l>* gen_contours_skeleton_xld(Skeleton, Contours, 6, 'filter')</l>
+<c>***************************************血管分段BEGIN***************************************</c>
+<c>* 清晰度算法另作函数split_vessel_region单独调用 </c>
+<c>* 注意：调用顺序必须在 预处理得到血管区域集合以及高斯滤波图像 之后！！</c>
+<c>* Branch分支 Node结点</c>
+<l>* split_vessel_region (RegionConnectedPrev, ImagePrevGauss, RegionBranchs, RegionNodes, Width, Height)</l>
+<c></c>
+<l>* union1(RegionNodes, UnionRegionNodes)</l>
+<l>* dev_clear_window()</l>
+<l>* dev_display(RegionBranchs)</l>
+<l>* dev_display(UnionRegionNodes)</l>
+<c>***************************************血管分段END***************************************</c>
 <c></c>
 <c>* 遍历图像序列</c>
 <l>for I:=firstIndex+1 to firstIndex+100 by 1</l>
 <c>    * 前帧血管区域判空 若为空 next one</c>
-<l>    area_center(RegionUnionPrev, AreaRegionUnionPrev, useless, useless)</l>
-<l>    if(|AreaRegionUnionPrev| == 0 or -1 == AreaRegionUnionPrev)</l>
-<l>        pre_process (ImagePrev, ImagePrevGauss, RegionUnionPrev, 'D:/codes/PicAndTemplate/EV_PIC/', I, Width, Height)</l>
+<l>    area_center(NeedSplitRegionsPrev, AreaNeedSplitRegionsPrev, useless, useless)</l>
+<l>    if(|AreaNeedSplitRegionsPrev| == 0 or -1 == AreaNeedSplitRegionsPrev)</l>
+<l>        pre_process (ImagePrev, ImagePrevGauss, RegionConnectedPrev, NeedSplitRegionsPrev, 'D:/codes/PicAndTemplate/EV_PIC/', I, Width, Height)</l>
 <l>        continue</l>
 <l>    endif</l>
 <c>    </c>
 <c>    * 后一帧预处理</c>
-<l>    pre_process (ImageRear, ImageRearGauss, RegionUnionRear, 'D:/codes/PicAndTemplate/EV_PIC/', I, Width, Height)</l>
+<l>    pre_process (ImageRear, ImageRearGauss, RegionConnectedRear, NeedSplitRegionsRear, 'D:/codes/PicAndTemplate/EV_PIC/', I, Width, Height)</l>
 <c>    </c>
 <c>    * 后帧血管区域判空 若为空 next one</c>
-<l>    area_center(RegionUnionRear, AreaRegionUnionRear, useless, useless)</l>
-<l>    if(|AreaRegionUnionRear| == 0 or -1 == AreaRegionUnionRear)</l>
+<l>    area_center(NeedSplitRegionsRear, AreaNeedSplitRegionsRear, useless, useless)</l>
+<l>    if(|AreaNeedSplitRegionsRear| == 0 or -1 == AreaNeedSplitRegionsRear)</l>
 <l>        I := I + 1</l>
-<l>        pre_process (ImagePrev, ImagePrevGauss, RegionUnionPrev, 'D:/codes/PicAndTemplate/EV_PIC/', I, Width, Height)</l>
+<l>        pre_process (ImagePrev, ImagePrevGauss, RegionConnectedPrev, NeedSplitRegionsPrev, 'D:/codes/PicAndTemplate/EV_PIC/', I, Width, Height)</l>
 <l>        continue</l>
 <l>    endif</l>
 <c>    </c>
 <c>    * 调试显示 前后两帧的血管位置差异大不大</c>
 <l>*     dev_clear_window()</l>
-<l>*     dev_display(RegionUnionPrev)</l>
-<l>*     dev_display(RegionUnionRear)</l>
+<l>*     dev_display(NeedSplitRegionsPrev)</l>
+<l>*     dev_display(NeedSplitRegionsRear)</l>
 <c>    </c>
 <c>    * 前后帧差异区域</c>
-<l>    difference(RegionUnionPrev, RegionUnionRear, RegionDifference)</l>
+<l>    difference(NeedSplitRegionsPrev, NeedSplitRegionsRear, RegionDifference)</l>
 <c>    </c>
 <c>    * 计算差异区域在各行的宽度</c>
 <l>    dis_Row := []</l>
@@ -94,9 +105,9 @@
 <l>        for Col:=-maxColDis to maxColDis by deviationColDis</l>
 <l>            hom_mat2d_identity(HomMat2D)</l>
 <l>            hom_mat2d_translate(HomMat2D, Row, Col, HomMat2D)</l>
-<l>            affine_trans_region(RegionUnionRear, RegionUnionRearTrans, HomMat2D, 'nearest_neighbor')</l>
+<l>            affine_trans_region(NeedSplitRegionsRear, NeedSplitRegionsRearTrans, HomMat2D, 'nearest_neighbor')</l>
 <c>            </c>
-<l>            intersection(RegionUnionPrev, RegionUnionRearTrans, RegionIntersect)</l>
+<l>            intersection(NeedSplitRegionsPrev, NeedSplitRegionsRearTrans, RegionIntersect)</l>
 <l>            area_center(RegionIntersect, AreaRegionIntersect, RowRegionIntersect, ColumnRegionIntersect)</l>
 <l>            if(AreaRegionIntersect &gt; maxIntersectArea)</l>
 <l>                maxIntersectArea := AreaRegionIntersect</l>
@@ -108,13 +119,13 @@
 <c>    </c>
 <c>    * 细瞄 将前帧的血管区域移动至的重叠面积最大的地方 达到防抖的效果</c>
 <c>    * J循环是为了多找一次 提高精度</c>
-<l>    for J:=1 to 2 by 1</l>
+<l>    for J:=0 to 1 by 1</l>
 <l>        for X:=-2.56 to 2.56 by 0.16</l>
 <l>            hom_mat2d_identity(HomMat2D)</l>
 <l>            hom_mat2d_translate(HomMat2D, maxIntersectAreaRow, maxIntersectAreaCol+X, HomMat2D)</l>
-<l>            affine_trans_region(RegionUnionRear, RegionUnionRearTrans, HomMat2D, 'constant')</l>
+<l>            affine_trans_region(NeedSplitRegionsRear, NeedSplitRegionsRearTrans, HomMat2D, 'constant')</l>
 <c>            </c>
-<l>            intersection(RegionUnionPrev, RegionUnionRearTrans, RegionIntersect)</l>
+<l>            intersection(NeedSplitRegionsPrev, NeedSplitRegionsRearTrans, RegionIntersect)</l>
 <l>            area_center(RegionIntersect, AreaRegionIntersect, RowRegionIntersect, ColumnRegionIntersect)</l>
 <l>            if(AreaRegionIntersect &gt; maxIntersectArea)</l>
 <l>                maxIntersectArea := AreaRegionIntersect</l>
@@ -125,9 +136,9 @@
 <l>        for Y:=-2.56 to 2.56 by 0.16</l>
 <l>            hom_mat2d_identity(HomMat2D)</l>
 <l>            hom_mat2d_translate(HomMat2D, maxIntersectAreaRow+Y, maxIntersectAreaCol, HomMat2D)</l>
-<l>            affine_trans_region(RegionUnionRear, RegionUnionRearTrans, HomMat2D, 'constant')</l>
+<l>            affine_trans_region(NeedSplitRegionsRear, NeedSplitRegionsRearTrans, HomMat2D, 'constant')</l>
 <c>            </c>
-<l>            intersection(RegionUnionPrev, RegionUnionRearTrans, RegionIntersect)</l>
+<l>            intersection(NeedSplitRegionsPrev, NeedSplitRegionsRearTrans, RegionIntersect)</l>
 <l>            area_center(RegionIntersect, AreaRegionIntersect, RowRegionIntersect, ColumnRegionIntersect)</l>
 <l>            if(AreaRegionIntersect &gt; maxIntersectArea)</l>
 <l>                maxIntersectArea := AreaRegionIntersect</l>
@@ -136,24 +147,25 @@
 <l>        endfor</l>
 <l>    endfor</l>
 <c>    </c>
+<c>    * 最终找到 后帧对前帧的最佳移动位置</c>
 <l>    hom_mat2d_identity(HomMat2D)</l>
 <l>    hom_mat2d_translate(HomMat2D, maxIntersectAreaRow, maxIntersectAreaCol, HomMat2D)</l>
-<l>    affine_trans_region(RegionUnionRear, RegionUnionRearTrans, HomMat2D, 'constant')</l>
+<l>    affine_trans_region(NeedSplitRegionsRear, NeedSplitRegionsRearTrans, HomMat2D, 'constant')</l>
 <l>    affine_trans_image(ImageRearGauss, ImageRearGaussTrans, HomMat2D, 'constant', 'false')</l>
 <c>    </c>
-<c>    * 合并前后帧血管区域 形成一个膨胀的、前后血管区域兼备的ROI集</c>
+<c>    * 合并前后帧血管区域 形成一个膨胀的、前后血管区域兼备的ROI</c>
 <c>    * 并计算连通区域 得到最终的ROI区域</c>
-<l>    union2(RegionUnionPrev, RegionUnionRearTrans, RegionUnionPrevRear)</l>
+<l>    union2(NeedSplitRegionsPrev, NeedSplitRegionsRearTrans, NeedSplitRegionsPrevRear)</l>
 <l>*     dev_clear_window()</l>
 <l>*     dev_display(ImageRearGaussTrans)</l>
-<l>*     dev_display(RegionUnionPrevRear)</l>
+<l>*     dev_display(NeedSplitRegionsPrevRear)</l>
 <c>    </c>
 <c>    * 输出膨胀后的血管检测区域 调试用</c>
-<l>*     debug_output_vesselConnect (RegionUnionPrevRear, ImagePrev, ImageRear, 'D:/codes/PicAndTemplate/EV_PIC/1_CellTrack/_vesselConnect', I)</l>
+<l>*     debug_output_vesselConnect (NeedSplitRegionsPrevRear, ImagePrev, ImageRear, 'D:/codes/PicAndTemplate/EV_PIC/1_CellTrack/_vesselConnect', I)</l>
 <c>        </c>
 <c>    * 计算前后两帧的区别</c>
-<l>    reduce_domain(ImagePrevGauss, RegionUnionPrevRear, ImagePrevCalRegion)</l>
-<l>    reduce_domain(ImageRearGaussTrans, RegionUnionPrevRear, ImageRearCalRegion)</l>
+<l>    reduce_domain(ImagePrevGauss, NeedSplitRegionsPrevRear, ImagePrevCalRegion)</l>
+<l>    reduce_domain(ImageRearGaussTrans, NeedSplitRegionsPrevRear, ImageRearCalRegion)</l>
 <c>    </c>
 <c>    * 由于后帧发生过移动 因此ROI截取到的位置不一定完全重叠</c>
 <l>    intersection(ImagePrevCalRegion, ImageRearCalRegion, ROIintersection)</l>
@@ -186,7 +198,7 @@
 <l>*     stop()</l>
 <c>    </c>
 <c>    * debug输出用的图像 1.ImageCellTrackR 细胞运动路径图 2.ImageCellTrack_bg_R 带背景(bg)的细胞运动路径图</c>
-<l>*     debug_output_track_and_track_bg(ImagePrev, RegionUnionPrevRear, RegionCellTrack, Width, Height, 'D:/codes/PicAndTemplate/EV_PIC/1_CellTrack/track', I)</l>
+<l>*     debug_output_track_and_track_bg(ImagePrev, NeedSplitRegionsPrevRear, RegionCellTrack, Width, Height, 'D:/codes/PicAndTemplate/EV_PIC/1_CellTrack/track', I)</l>
 <c></c>
 <c>    * 计算流动轨迹面积</c>
 <c>    * 令 红细胞流速(mm/ms) = 流动轨迹面积(px) * 像素尺寸(mm/px) / 放大倍率 / 前后帧时间差(ms)</c>
@@ -198,11 +210,11 @@
 <c>    * 后帧变前帧</c>
 <l>    ImagePrev := ImageRear</l>
 <l>    ImagePrevGauss := ImageRearGauss</l>
-<l>    RegionUnionPrev := RegionUnionRear</l>
+<l>    NeedSplitRegionsPrev := NeedSplitRegionsRear</l>
 <c>    </c>
 <l>*     stop()</l>
 <l>endfor</l>
-<c>***************************************新型防抖骗术END***************************************</c>
+<c>***************************************消抖+流动轨迹面积END***************************************</c>
 </body>
 <docu id="main">
 <parameters/>
@@ -353,8 +365,9 @@
 <procedure name="pre_process">
 <interface>
 <oo>
-<par name="Image" base_type="iconic" dimension="0"/>
+<par name="ImageOri" base_type="iconic" dimension="0"/>
 <par name="ImageGauss" base_type="iconic" dimension="0"/>
+<par name="RegionConnected" base_type="iconic" dimension="0"/>
 <par name="RegionUnion" base_type="iconic" dimension="0"/>
 </oo>
 <ic>
@@ -367,38 +380,43 @@
 </oc>
 </interface>
 <body>
-<l>read_image(Image, path + Index)</l>
+<c>* 注意 ImageOri是在hdev端调试输出图像用的 在CPP端不需要输出</c>
+<l>read_image (ImageOri, path + Index)</l>
 <c></c>
-<l>get_image_size(Image, Width, Height)</l>
+<l>get_image_size (ImageOri, Width, Height)</l>
 <c></c>
-<l>count_channels(Image, Channels)</l>
+<l>count_channels (ImageOri, Channels)</l>
 <l>if(Channels == 3)</l>
-<l>    rgb1_to_gray(Image, Image)</l>
+<l>    rgb1_to_gray (ImageOri, ImageOri)</l>
 <l>endif</l>
 <c></c>
-<l>gauss_filter(Image, ImageGauss, 7)</l>
+<l>gauss_filter (ImageOri, ImageGauss, 7)</l>
 <c></c>
-<c>* 寻找血管线 均值滤波+动态阈值</c>
+<c>* 寻找血管区域 均值滤波+动态阈值</c>
 <l>mean_image(ImageGauss, ImageMean, 43, 43)</l>
 <l>dyn_threshold(ImageGauss, ImageMean, RegionDynThresh, 5, 'dark')</l>
 <c></c>
+<c>* 闭运算补小洞</c>
+<l>closing_circle(RegionDynThresh, RegionClosing, 3)</l>
+<c></c>
 <c>* 分散出若干个连接起来的区域 大部分大概率是血管区域</c>
-<l>connection(RegionDynThresh, ConnectedRegions)</l>
+<l>connection(RegionClosing, RawRegionConnected)</l>
 <c></c>
 <c>* 根据面积筛选掉噪音</c>
-<l>select_shape(ConnectedRegions, SelectedRegions, 'area', 'and', 50, Width*Height)</l>
+<l>select_shape(RawRegionConnected, RegionConnected, 'area', 'and', 50, Width*Height)</l>
 <c></c>
 <c>* 合并 检测到的分散血管区域 后面有用</c>
-<l>union1(SelectedRegions, RegionUnion)</l>
+<l>union1(RegionConnected, RegionUnion)</l>
 <c></c>
 <l>return ()</l>
 </body>
 <docu id="pre_process">
 <parameters>
 <parameter id="Height"/>
-<parameter id="Image"/>
 <parameter id="ImageGauss"/>
+<parameter id="ImageOri"/>
 <parameter id="Index"/>
+<parameter id="RegionConnected"/>
 <parameter id="RegionUnion"/>
 <parameter id="Width"/>
 <parameter id="path"/>
@@ -419,29 +437,26 @@
 </oc>
 </interface>
 <body>
-<l>pre_process(Image, ImageGauss, RegionUnion, Path, Index, Width, Height)</l>
+<c>* 预处理函数中使用了均值滤波+动态阈值的方法获取连续的低灰度区域 可认为这些区域都是血管区域</c>
+<l>pre_process (Image, ImageGauss, RegionConnected, RegionUnion, Path, Index, Width, Height)</l>
 <c></c>
-<l>reduce_domain (ImageGauss, RegionUnion, ImageReduced)</l>
+<c>* 血管区域的外轮廓</c>
+<l>boundary(RegionUnion, BorderRegionUnion, 'inner')</l>
 <c></c>
-<l>sobel_amp(ImageReduced, EdgeAmplitude, 'sum_abs', 7)</l>
-<c>    </c>
-<l>gen_rectangle1(rect, 0, 0, Height, Width)</l>
-<l>min_max_gray(rect, EdgeAmplitude, 0, Min, Max, Range)</l>
+<c>* 通用方法获取图像边缘区域</c>
+<l>equ_histo_image(ImageGauss, ImageGaussEquHisto)</l>
+<l>edges_image(ImageGaussEquHisto, ImaAmp, ImaDir, 'canny', 1, 'nms', -1, -1)</l>
+<l>mean_image(ImaAmp, ImageMean, 23, 23)</l>
+<l>dyn_threshold(ImaAmp, ImageMean, BorderEdges, 5, 'light')</l>
 <c></c>
-<l>if(Min==0)</l>
-<l>    Min:=1</l>
-<l>elseif(Min&gt;5)</l>
-<l>    Min:=5</l>
-<l>endif</l>
-<l>edges_sub_pix(EdgeAmplitude, Edges, 'canny', 1, Min, 5)</l>
+<c>* 计算 血管区域外轮廓的周长 以及 边缘区域长度</c>
+<l>area_center(BorderRegionUnion, AreaBorderRegionUnion, useless, useless)</l>
+<l>area_center(BorderEdges, AreaBorderEdges, useless, useless)</l>
 <c></c>
-<l>length_xld(Edges, Length)</l>
-<l>if(|Length|)</l>
-<l>    area_center(RegionUnion, AreaRegionUnion, useless, useless)</l>
-<l>    if(AreaRegionUnion &gt; 0)</l>
-<l>        tuple_sum(Length, Sum)</l>
-<l>        Sharpness := Sum / AreaRegionUnion</l>
-<l>    endif</l>
+<c>* 理论上来说 在理想情况下 当一幅图像足够清晰时 其轮廓周长(A)与边缘长度(B)应该相等 即A / B = 1 比如一个线宽为1的黑框白色正方形</c>
+<c>* 经过几个数据集实验 此处清晰度取值范围为[0.91, 1.195) </c>
+<l>if(|AreaBorderRegionUnion|==1 and |AreaBorderEdges|==1 and AreaBorderRegionUnion&gt;0)</l>
+<l>    Sharpness := real(AreaBorderEdges) / real(AreaBorderRegionUnion)</l>
 <l>else</l>
 <l>    Sharpness := 0</l>
 <l>endif</l>
@@ -454,6 +469,124 @@
 <parameter id="Index"/>
 <parameter id="Path"/>
 <parameter id="Sharpness"/>
+</parameters>
+</docu>
+</procedure>
+<procedure name="split_vessel_region">
+<interface>
+<io>
+<par name="RegionConnected" base_type="iconic" dimension="0"/>
+<par name="ImageGauss" base_type="iconic" dimension="0"/>
+</io>
+<oo>
+<par name="RegionBranchs" base_type="iconic" dimension="0"/>
+<par name="RegionNodes" base_type="iconic" dimension="0"/>
+</oo>
+<ic>
+<par name="Width" base_type="ctrl" dimension="0"/>
+<par name="Height" base_type="ctrl" dimension="0"/>
+</ic>
+</interface>
+<body>
+<c>* 面积大于4000px的血管区域才进行分割</c>
+<l>select_shape(RegionConnected, NeedSplitRegions, 'area', 'and', 4000, Width*Height)</l>
+<l>union1(NeedSplitRegions, UnionNeedSplitRegions)</l>
+<c></c>
+<c>* 求血管区域骨骼(Skeleton)及其分叉点(JuncPoints) 端点(EndPoints)没用</c>
+<c>* 注意：骨骼，即中心线</c>
+<l>skeleton(UnionNeedSplitRegions, Skeleton)</l>
+<l>junctions_skeleton(Skeleton, EndPoints, JuncPoints)</l>
+<c></c>
+<c>* 分水岭算法 根据连续的灰度等级将需要分割的区域若干块(Basins) 顺便得到分割区域的分割线(Watersheds)</c>
+<l>reduce_domain(ImageGauss, UnionNeedSplitRegions, ImageReduced)</l>
+<l>equ_histo_image(ImageReduced, ImageEquHisto)</l>
+<l>watersheds(ImageEquHisto, Basins, Watersheds)</l>
+<c></c>
+<c>* 遍历Basins的每个区域块(A) 若A中包含至少一个属于JuncPoints的分叉点(B) 块(block)</c>
+<c>* 则认为A属于血管区域的结点区域(Node) 否则属于分支区域(Branch)</c>
+<c>* 注意：参考二叉树结构 分为树和子树 再分为结点和叶 此处不叫"叶"叫"分支"比较形象</c>
+<l>gen_region_points(UnionRegionBranchBlocks, [], [])</l>
+<l>gen_region_points(UnionRegionNodeBlocks, [], [])</l>
+<l>count_obj(Basins, Number)</l>
+<l>for I := 1 to Number by 1</l>
+<l>    select_obj(Basins, ObjectSelected, I)</l>
+<l>    intersection(ObjectSelected, JuncPoints, RegionIntersection)</l>
+<l>    area_center(RegionIntersection, Area123, useless, useless)</l>
+<l>    if(Area123 &lt; 1)</l>
+<l>        union2(UnionRegionBranchBlocks, ObjectSelected, UnionRegionBranchBlocks)</l>
+<l>    else</l>
+<l>        union2(UnionRegionNodeBlocks, ObjectSelected, UnionRegionNodeBlocks)</l>
+<l>    endif</l>
+<l>endfor</l>
+<c></c>
+<c>* 合并分支区域(Branch)和分割线(Watersheds) 得到完整的原始(Raw)分支区域</c>
+<c>* 注意：之所以叫原始区域 是因为这里会有一些依然孤立的或者突兀在分支边缘的分割线 但这里先不处理</c>
+<l>union2(UnionRegionBranchBlocks, Watersheds, UnionRegionRawBranchs)</l>
+<l>connection(UnionRegionRawBranchs, RegionRawBranchs)</l>
+<l>count_obj(RegionRawBranchs, NumberRegionRawBranchs)</l>
+<c></c>
+<c>* 原始结点区域集合</c>
+<l>connection(UnionRegionNodeBlocks, RegionRawNodes)</l>
+<l>count_obj(RegionRawNodes, NumbeRegionNodes)</l>
+<c></c>
+<c>* 需要分割的血管区域的外边界(BorderNeedSplitRegions)</c>
+<l>boundary(UnionNeedSplitRegions, BorderNeedSplitRegions, 'inner')</l>
+<c></c>
+<c>* 以JuncPoints中的各个交叉点为圆点 以JuncPoints中的各个交叉点到BorderNeedSplitRegions的最小距离为半径 作若干个圆(Circles)</c>
+<l>get_region_points(JuncPoints, RowsJuncPoints, ColsJuncPoints)</l>
+<l>distance_pr(BorderNeedSplitRegions, RowsJuncPoints, ColsJuncPoints, DistanceMin, DistanceMax)</l>
+<l>gen_circle(Circles, RowsJuncPoints, ColsJuncPoints, DistanceMin)</l>
+<c></c>
+<c>* 遍历Circles中的所有圆(A) A的圆点在结点区域内 因此圆A必然和至少1个结点区域(B)相交</c>
+<c>* 若A还能与若干个原始分支区域(C)相交 且相交面积达到圆面积的1/10 则可认为B和C是可连接起来的</c>
+<c>* 注意：此步骤的理论支撑大概就是 交叉点跟外边界的最小距离内的所有接触区域集合 </c>
+<l>gen_region_points(RegionBranchsMergeWithNodes, [], [])</l>
+<l>for I:=1 to |RowsJuncPoints| by 1</l>
+<l>    select_obj(Circles, Circle, I)</l>
+<l>    area_center(Circle, AreaCircle, useless, useless)</l>
+<l>    for J:=1 to NumbeRegionNodes by 1</l>
+<l>        select_obj(RegionRawNodes, Node, J)</l>
+<l>        intersection(Circle, Node, RegionIntersectionCN)</l>
+<l>        area_center(RegionIntersectionCN, AreaRegionIntersectionCN, useless, useless)</l>
+<l>        if(|AreaRegionIntersectionCN|==1 and AreaRegionIntersectionCN&gt;0)</l>
+<l>            for K:=1 to NumberRegionRawBranchs by 1</l>
+<l>                select_obj(RegionRawBranchs, RawBranch, K)</l>
+<l>                intersection(Circle, RawBranch, RegionIntersectionCB)</l>
+<l>                area_center(RegionIntersectionCB, AreaRegionIntersectionCB, useless, useless)</l>
+<l>                if(|AreaRegionIntersectionCB|==1 and AreaRegionIntersectionCB&gt;=(AreaCircle/10))</l>
+<l>                    union2(RegionBranchsMergeWithNodes, Node, RegionBranchsMergeWithNodes)</l>
+<l>                    union2(RegionBranchsMergeWithNodes, RawBranch, RegionBranchsMergeWithNodes)</l>
+<l>                endif</l>
+<l>            endfor</l>
+<l>        endif</l>
+<l>    endfor</l>
+<l>endfor</l>
+<c></c>
+<c>* 没有与结点结合的分支</c>
+<l>difference(UnionRegionRawBranchs, RegionBranchsMergeWithNodes, RegionNotMergeBranchs)</l>
+<c></c>
+<c>* 注意 上面说过的孤立或者突兀的分割线 在下述两步中通过区域合并和分割 会十分自然的被处理掉 且可以保证区域的面积从始至终没有改变过</c>
+<c></c>
+<c>* 最终得到的完整分支区域</c>
+<l>connection(RegionBranchsMergeWithNodes, ConnectedBranchsMergeWithNodes)</l>
+<l>connection(RegionNotMergeBranchs, ConnectedNotMergeBranchs)</l>
+<l>concat_obj(ConnectedBranchsMergeWithNodes, ConnectedNotMergeBranchs, RegionBranchs)</l>
+<c></c>
+<c>* 最终得到的完整结点区域</c>
+<l>union1(RegionBranchs, UnionRegionBranchs)</l>
+<l>difference(UnionNeedSplitRegions, UnionRegionBranchs, UnionRegionNodes)</l>
+<l>connection(UnionRegionNodes, RegionNodes)</l>
+<c></c>
+<l>return ()</l>
+</body>
+<docu id="split_vessel_region">
+<parameters>
+<parameter id="Height"/>
+<parameter id="ImageGauss"/>
+<parameter id="RegionBranchs"/>
+<parameter id="RegionConnected"/>
+<parameter id="RegionNodes"/>
+<parameter id="Width"/>
 </parameters>
 </docu>
 </procedure>
