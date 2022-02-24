@@ -31,9 +31,7 @@ extern "C"
 class VideoAnalysier
 {
 public:
-    VideoAnalysier();
-
-    QVector<QImage>& analysisFirst100Frame(const QString& videopath);
+    VideoAnalysier(const QString& videopath, QVector<QImage>& imagelist, int analysisFrameCount = 100);
 
 private:
     bool init(const QString& videopath);
@@ -53,8 +51,6 @@ private:
 
     int mVideostreamIdx;                    // 视频流位置
     double mTimeBase;                       // 用于换算成 -> 秒 <- 数的时间基
-
-    QVector<QImage> mImagelist;
 };
 
 class VideoFramePlayer : public QWidget
@@ -93,9 +89,13 @@ private slots:
 
     void slotPaintSplitVesselRegion();
 
+    void slotPaintFlowTrackRegion();
+
     void slotSaveImage();
 
     void slotExportImageList();
+
+    void slotRedraw();
 
 signals:
     void signalExit(VideoFramePlayer*);
@@ -111,11 +111,11 @@ private:
     int mTotalFrameCount;                   // 总帧数
     int mCurrentFrameIdnex;                 // 当前帧下标
 
-    //QVector<QPainterPath> mRegionPainterPaths;      // 血管区域的绘制路径
-
     RegionPoints mRegionBoundaryPoints;             // 单张图片的血管外边缘区域的坐标
     QVector<RegionPoints> mRegionBranchPoints;      // 单张图片的血管分支区域的坐标
     QVector<RegionPoints> mRegionNodesPoints;       // 单张图片的血管结点区域的坐标
     QVector<RegionPoints> mRegionFlowTrackPoints;   // 全部图片的流动轨迹的坐标
     QVector<double> mFlowTrackAreas;                // 全部图片的流动轨迹面积
+
+    bool mIsShowingTracks;                  // 是否正在显示某个区域
 };

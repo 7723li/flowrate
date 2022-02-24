@@ -34,8 +34,8 @@ Widget::Widget(QWidget *parent)
 
     mRuntimeFramerateFuncPtr = mLib.resolve("getRuntimeFramerate");
 
-    mGetRuntimeFramerateTimer.setInterval(1000);
-    connect(&mGetRuntimeFramerateTimer, &QTimer::timeout, this, &Widget::slotRefreshFramerate);
+//    mGetRuntimeFramerateTimer.setInterval(1000);
+//    connect(&mGetRuntimeFramerateTimer, &QTimer::timeout, this, &Widget::slotRefreshFramerate);
 
     connect(&mAsyncFlowrateCalculator, &AsyncSharpnessCalculator::signalUpdateSharpness,this, &Widget::slotCalcSharpness, Qt::QueuedConnection);
 
@@ -51,7 +51,7 @@ Widget::Widget(QWidget *parent)
     connect(&mLoopCalcFlowTrackTimer, &QTimer::timeout, this, &Widget::slotLoopCalcFlowTrack);
     mLoopCalcFlowTrackTimer.start();
 
-    QTimer::singleShot(1000, this, &Widget::slotInitOpenCamera);
+    //QTimer::singleShot(1000, this, &Widget::slotInitOpenCamera);
 }
 
 Widget::~Widget()
@@ -546,8 +546,8 @@ void Widget::slotVideoRecordDoubleClick(const QModelIndex &index)
         return;
     }
 
-    VideoAnalysier videoAnalysier;
-    QVector<QImage>& imagelist = videoAnalysier.analysisFirst100Frame(videoPath);
+    QVector<QImage> imagelist;
+    VideoAnalysier(videoPath, imagelist);
     if(imagelist.empty())
     {
         return;
@@ -608,10 +608,10 @@ void Widget::slotLoopCalcFlowTrack()
     for(int i = 0; i < rowCount; ++i)
     {
         QTableWidgetItem* flowrateItem = videorecord->item(i, 2);
-        if(mFlowTrackCalculatingNumer < 2 && flowrateItem->text() == QStringLiteral("等待中"))
+        if(mFlowTrackCalculatingNumer < mUI.flowrateProcessNumber->currentText().toInt() && flowrateItem->text() == QStringLiteral("等待中"))
         {
-            VideoAnalysier videoAnalysier;
-            QVector<QImage>& imagelist = videoAnalysier.analysisFirst100Frame(videorecord->item(i, 0)->text());
+            QVector<QImage> imagelist;
+            VideoAnalysier(videorecord->item(i, 0)->text(), imagelist);
             if(imagelist.size() < 2)
             {
                 continue;

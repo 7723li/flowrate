@@ -64,7 +64,7 @@ void Flowrate::calFlowTrackAreas(const QVector<QImage> &imagelist, QVector<doubl
 
         //后帧血管区域判空 若为空 next one
         AreaCenter(RegionUnionRear, &AreaRegionUnionRear, &useless, &useless);
-        if (AreaRegionUnionRear.TupleLength() ==0 || -1 == AreaRegionUnionRear)
+        if (AreaRegionUnionRear.TupleLength() == 0 || -1 == AreaRegionUnionRear)
         {
             preProcess(imagelist[++i], &ImagePrevGauss, &RegionConnectedPrev, &RegionUnionPrev);
             continue;
@@ -75,7 +75,7 @@ void Flowrate::calFlowTrackAreas(const QVector<QImage> &imagelist, QVector<doubl
 
         //计算差异区域在各行的宽度
         dis_Row = HTuple();
-        for (int j = 0; j < height - 1; ++j)
+        for (int j = 0; j < height; ++j)
         {
             GenRegionLine(&Line, j, 0, j, width - 1);
             Intersection(Line, RegionDifference, &RegionIntersection);
@@ -86,7 +86,7 @@ void Flowrate::calFlowTrackAreas(const QVector<QImage> &imagelist, QVector<doubl
 
         //计算差异区域在各列的高度
         dis_Col = HTuple();
-        for (int j = 0; j < height - 1; ++j)
+        for (int j = 0; j < width; ++j)
         {
             GenRegionLine(&Line, 0, j, height - 1, j);
             Intersection(Line, RegionDifference, &RegionIntersection);
@@ -204,7 +204,7 @@ void Flowrate::calFlowTrackAreas(const QVector<QImage> &imagelist, QVector<doubl
 
         Boundary(RegionCellTrack, &BorderRegionCellTrack, "inner");
         GetRegionPoints(BorderRegionCellTrack, &BorderRegionCellTrackRows, &BorderRegionCellTrackCols);
-        int BorderRegionCellTrackPointCount = BorderRegionCellTrackRows = BorderRegionCellTrackRows.TupleLength();
+        int BorderRegionCellTrackPointCount = BorderRegionCellTrackRows.TupleLength();
         for(int j = 0; j < BorderRegionCellTrackPointCount; ++j)
         {
             regionPoints[i - 1].push_back(QPoint(BorderRegionCellTrackCols[j], BorderRegionCellTrackRows[j]));
@@ -270,7 +270,8 @@ void Flowrate::getBoundaryVesselRegion(const QImage &image, RegionPoints &Region
     GetRegionPoints(RegionUnionBorder, &Rows, &Cols);
 
     RegionBoundaryVesselPoints = RegionPoints();
-    for(int i = 0; i < Rows; ++i)
+    int pointCount = Rows.TupleLength();
+    for(int i = 0; i < pointCount; ++i)
     {
         RegionBoundaryVesselPoints.push_back(QPoint(Cols[i], Rows[i]));
     }
@@ -416,7 +417,7 @@ void Flowrate::getSplitVesselRegion(const QImage &image, QVector<RegionPoints> &
         SelectObj(RegionBranchs, &RegionBranch, i);
         GetRegionPoints(RegionBranch, &RegionBranchRows, &RegionBranchCols);
 
-        int regionBranchPointNumber = RegionNodeRows.TupleLength();
+        int regionBranchPointNumber = RegionBranchRows.TupleLength();
         RegionPoints regionPoints;
         for(int j = 0; j < regionBranchPointNumber; ++j)
         {

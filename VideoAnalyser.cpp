@@ -1,7 +1,7 @@
 ﻿#include "VideoAnalyser.h"
 
 VideoFramePlayer::VideoFramePlayer(int inRow, QWidget *p):
-    QWidget(p), mInRow(inRow), mTotalFrameCount(0), mCurrentFrameIdnex(1)
+    QWidget(p), mInRow(inRow), mTotalFrameCount(0), mCurrentFrameIdnex(1), mIsShowingTracks(false)
 {
     mUI.setupUi(this);
 
@@ -9,6 +9,8 @@ VideoFramePlayer::VideoFramePlayer(int inRow, QWidget *p):
     connect(mUI.nextFrame, &QPushButton::clicked, this, &VideoFramePlayer::slotNextFrame);
     connect(mUI.boundaryVesselRegion, &QPushButton::clicked, this, &VideoFramePlayer::slotPaintBoundaryVesselRegion);
     connect(mUI.splitVesselRegion, &QPushButton::clicked, this, &VideoFramePlayer::slotPaintSplitVesselRegion);
+    connect(mUI.showFlowTrack, &QPushButton::clicked, this, &VideoFramePlayer::slotPaintFlowTrackRegion);
+    connect(mUI.redraw, &QPushButton::clicked, this, &VideoFramePlayer::slotRedraw);
     connect(mUI.saveImageButton, &QPushButton::clicked, this, &VideoFramePlayer::slotSaveImage);
     connect(mUI.exportImageList, &QPushButton::clicked, this, &VideoFramePlayer::slotExportImageList);
 
@@ -34,6 +36,8 @@ void VideoFramePlayer::setImageList(QVector<QImage>& imagelist)
     mCurrentShowImage = mImageList.front();
     mTotalFrameCount = mImageList.size();
 
+    mIsShowingTracks = false;
+
     mUI.currentPageIndex->setNum(mCurrentFrameIdnex);
     mUI.totalPageCount->setNum(mTotalFrameCount);
 }
@@ -49,7 +53,7 @@ void VideoFramePlayer::updateFlowTrackAreas(const QVector<double> &flowTrackArea
 {
     mFlowTrackAreas = flowTrackAreas;
 
-    mUI.flowTrackArea->setText(QStringLiteral("流动轨迹面积：%1").arg(mFlowTrackAreas[mCurrentFrameIdnex]));
+    mUI.flowTrackArea->setText(QStringLiteral("流动轨迹面积：%1").arg(mFlowTrackAreas[mCurrentFrameIdnex - 1]));
 }
 
 void VideoFramePlayer::paintEvent(QPaintEvent *e)
@@ -59,22 +63,16 @@ void VideoFramePlayer::paintEvent(QPaintEvent *e)
     QPainter painter;
     painter.begin(mUI.frame);
 
-    const QImage& image = mCurrentShowImage;
+    const QImage& image = mImageList[mCurrentFrameIdnex - 1];
     if(!image.isNull() && image.width() > 0 && image.height() > 0)
     {
-        painter.drawImage(QRect(0, 0, mUI.frame->width(), mUI.frame->height()), image, QRect(0, 0, image.width(), image.height()));
+        painter.drawImage(QRect(0, 0, mUI.frame->width(), mUI.frame->height()), mCurrentShowImage, QRect(0, 0, image.width(), image.height()));
 
         double sharpness = Flowrate::getImageSharpness(image);
         bool isSharp = Flowrate::isSharp(sharpness);
         mUI.sharpness->setText(QStringLiteral("清晰度：%1").arg(QString::number(sharpness, 'g', 3)));
         mUI.isSharp->setText(QStringLiteral("是否清晰：%1").arg(isSharp ? QStringLiteral("是") : QStringLiteral("否")));
     }
-
-//    for(const QPainterPath& path : mRegionPainterPaths)
-//    {
-//        painter.setBrush(QBrush(Qt::red));
-//        painter.drawPath(path);
-//    }
 
     painter.end();
 }
@@ -139,7 +137,11 @@ void VideoFramePlayer::slotPrevFrame()
 
     mUI.currentPageIndex->setNum(mCurrentFrameIdnex);
     mCurrentShowImage = mImageList[mCurrentFrameIdnex - 1];
-    mUI.flowTrackArea->setText(QStringLiteral("流动轨迹面积：%1").arg(mFlowTrackAreas[mCurrentFrameIdnex]));
+    mIsShowingTracks = false;
+    if(mFlowTrackAreas.size() >= mCurrentFrameIdnex)
+    {
+        mUI.flowTrackArea->setText(QStringLiteral("流动轨迹面积：%1").arg(mFlowTrackAreas[mCurrentFrameIdnex - 1]));
+    }
     this->update();
 }
 
@@ -156,7 +158,11 @@ void VideoFramePlayer::slotNextFrame()
 
     mUI.currentPageIndex->setNum(mCurrentFrameIdnex);
     mCurrentShowImage = mImageList[mCurrentFrameIdnex - 1];
-    mUI.flowTrackArea->setText(QStringLiteral("流动轨迹面积：%1").arg(mFlowTrackAreas[mCurrentFrameIdnex]));
+    mIsShowingTracks = false;
+    if(mFlowTrackAreas.size() >= mCurrentFrameIdnex)
+    {
+        mUI.flowTrackArea->setText(QStringLiteral("流动轨迹面积：%1").arg(mFlowTrackAreas[mCurrentFrameIdnex - 1]));
+    }
     this->update();
 }
 
@@ -165,17 +171,21 @@ void VideoFramePlayer::slotPaintBoundaryVesselRegion()
     QTime time;
     time.start();
 
-    Flowrate::getBoundaryVesselRegion(mCurrentShowImage, mRegionBoundaryPoints);
+    Flowrate::getBoundaryVesselRegion(mImageList[mCurrentFrameIdnex - 1], mRegionBoundaryPoints);
+    qDebug() << QString("VideoAnalyser getBoundaryVesselRegion %1ms %2").arg(time.elapsed()).arg(mRegionBoundaryPoints.size());
 
-    qDebug() << QString("VideoAnalyser getBoundaryVesselRegion %1ms %2").arg(time.elapsed()).arg(mRegionNodesPoints.size());
+    if(!mIsShowingTracks)
+    {
+        mCurrentShowImage = mImageList[mCurrentFrameIdnex - 1];
+        mCurrentShowImage = mCurrentShowImage.convertToFormat(QImage::Format::Format_RGB888);
+        mIsShowingTracks = true;
+    }
 
-//    mRegionPainterPaths.clear();
-//    QPainterPath path;
-//    for(const QPoint& point : mRegionBoundaryPoints)
-//    {
-//        path.addEllipse(point, 1, 1);
-//    }
-//    mRegionPainterPaths.push_back(path);
+    for(const QPoint& point : mRegionBoundaryPoints)
+    {
+        mCurrentShowImage.setPixelColor(point, Qt::red);
+    }
+    this->update();
 }
 
 void VideoFramePlayer::slotPaintSplitVesselRegion()
@@ -183,32 +193,54 @@ void VideoFramePlayer::slotPaintSplitVesselRegion()
     QTime time;
     time.start();
 
-    Flowrate::getSplitVesselRegion(mCurrentShowImage, mRegionBranchPoints, mRegionNodesPoints);
-
+    Flowrate::getSplitVesselRegion(mImageList[mCurrentFrameIdnex - 1], mRegionBranchPoints, mRegionNodesPoints);
     qDebug() << QString("VideoAnalyser splitVesselRegion %1ms %2Branchs %3Nodes").arg(time.elapsed()).arg(mRegionBranchPoints.size()).arg(mRegionNodesPoints.size());
 
-//    mRegionPainterPaths.clear();
-//    for(const RegionPoints& rp : mRegionBranchPoints)
-//    {
-//        QPainterPath path;
-//        for(const QPoint& point : rp)
-//        {
-//            path.addEllipse(point, 1, 1);
-//        }
-//        mRegionPainterPaths.push_back(path);
-//    }
+    if(!mIsShowingTracks)
+    {
+        mCurrentShowImage = mImageList[mCurrentFrameIdnex - 1];
+        mCurrentShowImage = mCurrentShowImage.convertToFormat(QImage::Format::Format_RGB888);
+        mIsShowingTracks = true;
+    }
 
-//    for(const RegionPoints& rp : mRegionNodesPoints)
-//    {
-//        QPainterPath path;
-//        for(const QPoint& point : rp)
-//        {
-//            path.addEllipse(point, 1, 1);
-//        }
-//        mRegionPainterPaths.push_back(path);
-//    }
+    for(const RegionPoints& rp : mRegionBranchPoints)
+    {
+        int px1 = qrand() % 256, px2 = qrand() % 256, px3 = qrand() % 256;
+        for(const QPoint& point : rp)
+        {
+            mCurrentShowImage.setPixelColor(point, QColor(px1, px2, px3));
+        }
+    }
 
-//    qDebug() << "VideoAnalyser transferPointsToPaths" << time.elapsed() << "ms";
+    for(const RegionPoints& rp : mRegionNodesPoints)
+    {
+        int px1 = qrand() % 256, px2 = qrand() % 256, px3 = qrand() % 256;
+        for(const QPoint& point : rp)
+        {
+            mCurrentShowImage.setPixelColor(point, QColor(px1, px2, px3));
+        }
+    }
+
+    this->update();
+}
+
+void VideoFramePlayer::slotPaintFlowTrackRegion()
+{
+    if(mCurrentFrameIdnex >= mTotalFrameCount)
+    {
+        return;
+    }
+    else if(!mIsShowingTracks)
+    {
+        mCurrentShowImage = mImageList[mCurrentFrameIdnex - 1];
+        mCurrentShowImage = mCurrentShowImage.convertToFormat(QImage::Format::Format_RGB888);
+        mIsShowingTracks = true;
+    }
+
+    for(const QPoint& point : mRegionFlowTrackPoints[mCurrentFrameIdnex - 1])
+    {
+        mCurrentShowImage.setPixelColor(point, Qt::green);
+    }
 
     this->update();
 }
@@ -254,57 +286,54 @@ void VideoFramePlayer::slotExportImageList()
 
     for(int i = 1; i <= mTotalFrameCount; ++i)
     {
-        mImageList[i-1].save(currentDir.absoluteFilePath(QString("%1.png").arg(i)));
+        mImageList[i - 1].save(currentDir.absoluteFilePath(QString("%1.png").arg(i)));
     }
 }
 
-VideoAnalysier::VideoAnalysier() :
+void VideoFramePlayer::slotRedraw()
+{
+    mCurrentShowImage = mImageList[mCurrentFrameIdnex - 1];
+    mIsShowingTracks = false;
+    this->update();
+}
+
+VideoAnalysier::VideoAnalysier(const QString &videopath, QVector<QImage> &imagelist, int analysisFrameCount) :
     mAVFormatContext(nullptr), mAVCodecContext(nullptr), mAVStream(nullptr),
     mVideoCodec(nullptr), mOrifmtFrame(nullptr), mSwsfmtFrame(nullptr),
     mImgConvertCtx(nullptr), mFrameBuffer(nullptr), mReadPackct(nullptr),
     mVideostreamIdx(-1), mTimeBase(0)
 {
-
-}
-
-QVector<QImage>& VideoAnalysier::analysisFirst100Frame(const QString &videopath)
-{
-    if(!init(videopath))
+    imagelist = QVector<QImage>(analysisFrameCount);
+    if(init(videopath))
     {
-        return mImagelist;
-    }
-
-    int framecount = 0;
-    QImage image(mAVCodecContext->width, mAVCodecContext->height, QImage::Format::Format_Grayscale8);
-    while(av_read_frame(mAVFormatContext, mReadPackct) >= 0 && framecount < 100)
-    {
-        if(mReadPackct->stream_index != mVideostreamIdx)
+        int framecount = 0;
+        QImage image(mAVCodecContext->width, mAVCodecContext->height, QImage::Format::Format_Grayscale8);
+        while(av_read_frame(mAVFormatContext, mReadPackct) >= 0 && framecount < analysisFrameCount)
         {
+            if(mReadPackct->stream_index != mVideostreamIdx)
+            {
+                av_packet_unref(mReadPackct);
+                continue;
+            }
+
+            // 解码一帧
+            int get_picture = 0;
+            int ret = avcodec_decode_video2(mAVCodecContext, mOrifmtFrame, &get_picture, mReadPackct);
+            // 如果 解码成功(ret > 0) 并且 该帧为关键帧(get_picture > 0) 才去转码
+            if (ret > 0 && get_picture > 0)
+            {
+                // 转码一帧格式
+                sws_scale(mImgConvertCtx, mOrifmtFrame->data, mOrifmtFrame->linesize, 0, mAVCodecContext->height, mSwsfmtFrame->data, mSwsfmtFrame->linesize);
+            }
+
+            memcpy(image.bits(), mFrameBuffer, mAVCodecContext->width * mAVCodecContext->height);
+            imagelist[framecount++] = image;
+
             av_packet_unref(mReadPackct);
-            continue;
         }
-
-        ++framecount;
-
-        // 解码一帧
-        int get_picture = 0;
-        int ret = avcodec_decode_video2(mAVCodecContext, mOrifmtFrame, &get_picture, mReadPackct);
-        // 如果 解码成功(ret > 0) 并且 该帧为关键帧(get_picture > 0) 才去转码
-        if (ret > 0 && get_picture > 0)
-        {
-            // 转码一帧格式
-            sws_scale(mImgConvertCtx, mOrifmtFrame->data, mOrifmtFrame->linesize, 0, mAVCodecContext->height, mSwsfmtFrame->data, mSwsfmtFrame->linesize);
-        }
-
-        memcpy(image.bits(), mFrameBuffer, mAVCodecContext->width * mAVCodecContext->height);
-        mImagelist.push_back(image);
-
-        av_packet_unref(mReadPackct);
     }
 
     release();
-
-    return mImagelist;
 }
 
 bool VideoAnalysier::init(const QString &videopath)
