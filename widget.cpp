@@ -5,7 +5,8 @@ Widget::Widget(QWidget *parent)
     mUsingCamera(nullptr), mIsCameraOpen(false), mIsCameraCapturing(false),
     mLib("GenericCameraModule.dll"), mCommonFuncPtr(nullptr), mRuntimeFramerateFuncPtr(nullptr), mCameraParamWidget(new CameraParamWidget(mLib)),
     mFrameWidth(0), mFrameHeight(0), mPixelByteCount(0), mImageSize(0), mVideoRecorder(new AsyncVideoRecorder(mVideoWriter)), mConfigFramerate(0.0), mRunningFramerate(0.0),
-    mLastSecondRecvFrameCount(0), mLastSecondRecvFrameCountDisplay(0), mIsUpdatingCameraList(false), mShowDebugMessage(true), mSharpness(0.0), mContinueSharpFrameCount(0)
+    mLastSecondRecvFrameCount(0), mLastSecondRecvFrameCountDisplay(0), mIsUpdatingCameraList(false), mShowDebugMessage(true), mSharpness(0.0),
+    mContinueSharpFrameCount(0), mContinueRecordVideoCount(1), mFlowTrackCalculatingNumer(0)
 {
     qDebug() << "lib.load GenericCameraModule.dll" << mLib.load();
 
@@ -15,12 +16,17 @@ Widget::Widget(QWidget *parent)
     connect(mUI.begin_record_btn, &QPushButton::clicked, this, &Widget::beginRecord);
     connect(mUI.stop_record_btn, &QPushButton::clicked, this, &Widget::stopRecord);
     connect(mUI.checkBoxAutoRecord, &QCheckBox::stateChanged, this, &Widget::slotAutoRecordChecked);
+    connect(mUI.continueRecordNum, &QComboBox::currentTextChanged, this, &Widget::slotContinueRecordNumChanged);
+    connect(mUI.videorecord, &QTableWidget::doubleClicked, this, &Widget::slotVideoRecordDoubleClick);
+    connect(mUI.importButton, &QPushButton::clicked, this, &Widget::slotImportDir);
 
     connect(mCameraParamWidget, &CameraParamWidget::signalOpenCamera, this, &Widget::openCamera);
     connect(mCameraParamWidget, &CameraParamWidget::signalCloseCamera, this, &Widget::closeCamera);
     connect(mCameraParamWidget, &CameraParamWidget::signalBeginCapture, this, &Widget::beginCapture);
     connect(mCameraParamWidget, &CameraParamWidget::signalStopCapture, this, &Widget::stopCaptutre);
     connect(mCameraParamWidget, &CameraParamWidget::signalUpdateCameraListFinish, this, &Widget::slotAfterUpdateAvaliableCameras);
+
+    mRecordDuratiom.setHMS(0, 0, 0, 0);
 
     mDisplayTimer.setInterval(40);
     connect(&mDisplayTimer, SIGNAL(timeout()), this, SLOT(update()));
@@ -31,7 +37,7 @@ Widget::Widget(QWidget *parent)
     mGetRuntimeFramerateTimer.setInterval(1000);
     connect(&mGetRuntimeFramerateTimer, &QTimer::timeout, this, &Widget::slotRefreshFramerate);
 
-    connect(&mAsyncFlowrateCalculator, &AsyncFlowrateCalculator::signalUpdateSharpness,this, &Widget::slotCalcSharpness, Qt::QueuedConnection);
+    connect(&mAsyncFlowrateCalculator, &AsyncSharpnessCalculator::signalUpdateSharpness,this, &Widget::slotCalcSharpness, Qt::QueuedConnection);
 
     mRecordTimeLimitTimer.setInterval(60 * 60 * 1000);
     mRecordTimeLimitTimer.setSingleShot(true);
@@ -40,6 +46,10 @@ Widget::Widget(QWidget *parent)
     mAutoRecordTimeLimitTimer.setInterval(1000);
     mAutoRecordTimeLimitTimer.setSingleShot(true);
     connect(&mAutoRecordTimeLimitTimer, &QTimer::timeout, this, &Widget::stopRecord);
+
+    mLoopCalcFlowTrackTimer.setInterval(1000);
+    connect(&mLoopCalcFlowTrackTimer, &QTimer::timeout, this, &Widget::slotLoopCalcFlowTrack);
+    mLoopCalcFlowTrackTimer.start();
 
     QTimer::singleShot(1000, this, &Widget::slotInitOpenCamera);
 }
@@ -227,29 +237,31 @@ void Widget::beginRecord()
     mRecordVideoAbsFileInfo.setFile(tDir, tFormatVideoname + ".avi");
 
     bool opened = mVideoWriter.open(mRecordVideoAbsFileInfo.absoluteFilePath().toStdString().c_str(), CV_FOURCC('M', 'J', 'P', 'G'), mConfigFramerate, cv::Size(mFrameWidth, mFrameHeight), (mPixelByteCount != 1));
-    qDebug() << mRecordVideoAbsFileInfo.absoluteFilePath() << "_mVideoWriter.isOpened()" << opened;
+    qDebug() << mRecordVideoAbsFileInfo.absoluteFilePath() << "_mVideoWriter.isOpened()" << opened << mConfigFramerate << mFrameWidth << mFrameHeight << mPixelByteCount;
 
     if (mVideoWriter.isOpened())
     {
         mVideoRecorder->startRecord();
 
-
         mRecordBeginDateTime = QDateTime::currentDateTime();
 
-        if(!mUI.checkBoxAutoRecord->isChecked())
+        if(mContinueRecordVideoCount <= 1)
         {
-            mUI.begin_stop_record_stack->setCurrentWidget(mUI.page_stop_record_btn);
-        }
-        mUI.checkBoxAutoRecord->setEnabled(false);
+            if(!mUI.checkBoxAutoRecord->isChecked())
+            {
+                mUI.begin_stop_record_stack->setCurrentWidget(mUI.page_stop_record_btn);
+            }
 
-        mRecordTimeLimitTimer.start();
+            mUI.checkBoxAutoRecord->setEnabled(false);
+            mUI.continueRecordNum->setEnabled(false);
+
+            mRecordTimeLimitTimer.start();
+        }
     }
 }
 
 void Widget::stopRecord()
 {
-    qDebug() << "Widget::stopRecord";
-
     if (!mVideoWriter.isOpened() || !mVideoRecorder->recording())
     {
         return;
@@ -257,13 +269,20 @@ void Widget::stopRecord()
 
     mVideoRecorder->stopRecord();
 
-    mRecordTimeLimitTimer.stop();
-
-    if(!mUI.checkBoxAutoRecord->isChecked())
+    if(mContinueRecordVideoCount <= 1)
     {
-        mUI.begin_stop_record_stack->setCurrentWidget(mUI.page_begin_record_btn);
+        mRecordTimeLimitTimer.stop();
+
+        mUI.checkBoxAutoRecord->setEnabled(true);
+        mUI.continueRecordNum->setEnabled(true);
+
+        if(!mUI.checkBoxAutoRecord->isChecked())
+        {
+            mUI.begin_stop_record_stack->setCurrentWidget(mUI.page_begin_record_btn);
+        }
     }
-    mUI.checkBoxAutoRecord->setEnabled(true);
+
+    insertOneVideoRecord();
 }
 
 void Widget::processOneFrame(const _Fake_Mat &m)
@@ -341,14 +360,7 @@ void Widget::paintEvent(QPaintEvent *e)
 
     mPainter.end();
 
-    if (mVideoWriter.isOpened())
-    {
-        mUI.video_time_display->setText(mRecordDuratiom.toString("hh:mm:ss"));
-    }
-    else if (!mUI.video_time_display->text().isEmpty())
-    {
-        mUI.video_time_display->clear();
-    }
+    mUI.video_time_display->setText(mRecordDuratiom.toString("hh:mm:ss"));
 }
 
 void Widget::keyPressEvent(QKeyEvent *e)
@@ -392,6 +404,13 @@ void Widget::closeEvent(QCloseEvent *e)
 
     delete mCameraParamWidget;
     mCameraParamWidget = nullptr;
+
+    for(VideoFramePlayer* videoAnalyser : mVideoFramePlayerList)
+    {
+        delete videoAnalyser;
+        videoAnalyser = nullptr;
+    }
+    mVideoFramePlayerList.clear();
 }
 
 void Widget::slotInitOpenCamera()
@@ -455,19 +474,29 @@ void Widget::slotCalcSharpness(double sharpness)
     static const QString tips[] = {QStringLiteral("是"), QStringLiteral("否")};
 
     mSharpness = sharpness;
-    mUI.sharpness->setNum(mSharpness);
+    mUI.sharpness->setText(QString::number(mSharpness, 'g', 3));
 
     if(Flowrate::isSharp(mSharpness))
     {
         mUI.isSharp->setText(tips[0]);
 
-        if(mUI.checkBoxAutoRecord->isChecked())
+        if(!mVideoRecorder->recording() && mUI.checkBoxAutoRecord->isChecked())
         {
             ++mContinueSharpFrameCount;
             if(mContinueSharpFrameCount >= 10)
             {
-                beginRecord();
-                mAutoRecordTimeLimitTimer.start();
+                mContinueSharpFrameCount = 0;
+                if(mContinueRecordVideoCount > 0)
+                {
+                    --mContinueRecordVideoCount;
+                    beginRecord();
+                    mAutoRecordTimeLimitTimer.start();
+                }
+                else
+                {
+                    mContinueRecordVideoCount = 1;
+                    mUI.checkBoxAutoRecord->setChecked(false);
+                }
             }
         }
         else
@@ -486,12 +515,168 @@ void Widget::slotAutoRecordChecked(int status)
 {
     if(status == Qt::CheckState::Checked)
     {
+        mUI.continueRecordNum->setEnabled(false);
         mUI.begin_stop_record_stack->setEnabled(false);
     }
     else
     {
+        mUI.continueRecordNum->setEnabled(true);
         mUI.begin_stop_record_stack->setEnabled(true);
     }
+}
+
+void Widget::slotContinueRecordNumChanged(const QString& number)
+{
+    mContinueRecordVideoCount = number.toInt();
+}
+
+void Widget::slotVideoRecordDoubleClick(const QModelIndex &index)
+{
+    int inRow = index.row();
+
+    QTableWidgetItem* clickedItem = mUI.videorecord->item(inRow, 0);
+    if(!clickedItem)
+    {
+        return;
+    }
+
+    QString videoPath = clickedItem->text();
+    if(videoPath.isEmpty() || !QFile::exists(videoPath))
+    {
+        return;
+    }
+
+    VideoAnalysier videoAnalysier;
+    QVector<QImage>& imagelist = videoAnalysier.analysisFirst100Frame(videoPath);
+    if(imagelist.empty())
+    {
+        return;
+    }
+
+    VideoFramePlayer* videoFramePlayer = new VideoFramePlayer(inRow);
+    mVideoFramePlayerList.push_back(videoFramePlayer);
+
+    auto iter = mMapVideoRecordRowToFlowtrackArea.find(inRow);
+    if(iter != mMapVideoRecordRowToFlowtrackArea.end())
+    {
+        videoFramePlayer->updateFlowTrackAreas(mMapVideoRecordRowToFlowtrackArea[inRow]);
+        videoFramePlayer->updateFlowTrackPoints(mMapVideoRecordRowToFlowtrackRegionPoints[inRow]);
+    }
+
+    videoFramePlayer->setWindowTitle(videoPath);
+    videoFramePlayer->setImageList(imagelist);
+    videoFramePlayer->show();
+}
+
+void Widget::slotImportDir()
+{
+    QString inputdir = mUI.importDir->text();
+    QDir dir(inputdir);
+    if(!dir.exists())
+    {
+        return;
+    }
+
+    QFileInfoList fileinfolist = dir.entryInfoList(QDir::Filter::Files, QDir::SortFlag::Name);
+    for(const QFileInfo& fileinfo : fileinfolist)
+    {
+        if(fileinfo.fileName().endsWith(".avi"))
+        {
+            insertOneVideoRecord(fileinfo);
+        }
+    }
+}
+
+void Widget::slotCloseVideoFramePlayer(VideoFramePlayer *videoFramePlayer)
+{
+    if(!videoFramePlayer)
+    {
+        return;
+    }
+    else if(mVideoFramePlayerList.removeOne(videoFramePlayer))
+    {
+        delete videoFramePlayer;
+        videoFramePlayer = nullptr;
+    }
+}
+
+void Widget::slotLoopCalcFlowTrack()
+{
+    QTableWidget* videorecord = mUI.videorecord;
+    int rowCount = videorecord->rowCount();
+
+    for(int i = 0; i < rowCount; ++i)
+    {
+        QTableWidgetItem* flowrateItem = videorecord->item(i, 2);
+        if(mFlowTrackCalculatingNumer < 2 && flowrateItem->text() == QStringLiteral("等待中"))
+        {
+            VideoAnalysier videoAnalysier;
+            QVector<QImage>& imagelist = videoAnalysier.analysisFirst100Frame(videorecord->item(i, 0)->text());
+            if(imagelist.size() < 2)
+            {
+                continue;
+            }
+
+            ++mFlowTrackCalculatingNumer;
+            flowrateItem->setText(QStringLiteral("计算中"));
+
+            AsyncFlowTrackAreaCalculator* asyncFlowTrackAreaCalculator = new AsyncFlowTrackAreaCalculator(imagelist);
+            mMapFlowTrackThreadToFlowrateItem[asyncFlowTrackAreaCalculator] = flowrateItem;
+            connect(asyncFlowTrackAreaCalculator, &AsyncFlowTrackAreaCalculator::signalUpdateTrackArea, this, &Widget::slotUpdateTrackArea);
+
+            asyncFlowTrackAreaCalculator->start();
+        }
+    }
+}
+
+void Widget::slotUpdateTrackArea(AsyncFlowTrackAreaCalculator *asyncFlowTrackAreaCalculator)
+{
+    if(!asyncFlowTrackAreaCalculator)
+    {
+        return;
+    }
+    else
+    {
+        auto iter = mMapFlowTrackThreadToFlowrateItem.find(asyncFlowTrackAreaCalculator);
+        if(iter == mMapFlowTrackThreadToFlowrateItem.end())
+        {
+            return;
+        }
+    }
+
+    QVector<double> trackareas = std::move(asyncFlowTrackAreaCalculator->getFlowtrackArea());
+    QVector<RegionPoints> regionPoints = std::move(asyncFlowTrackAreaCalculator->getFlowtrackRegionPoints());
+
+    QTableWidgetItem* flowrateItem = mMapFlowTrackThreadToFlowrateItem[asyncFlowTrackAreaCalculator];
+    mMapFlowTrackThreadToFlowrateItem.remove(asyncFlowTrackAreaCalculator);
+
+    delete asyncFlowTrackAreaCalculator;
+    asyncFlowTrackAreaCalculator = nullptr;
+
+    --mFlowTrackCalculatingNumer;
+
+    int inRow = flowrateItem->row();
+
+    mMapVideoRecordRowToFlowtrackArea[inRow] = trackareas;
+    mMapVideoRecordRowToFlowtrackRegionPoints[inRow] = regionPoints;
+
+    for(VideoFramePlayer* videoFramePlayer : mVideoFramePlayerList)
+    {
+        if(videoFramePlayer->inRow() == inRow)
+        {
+            videoFramePlayer->updateFlowTrackAreas(trackareas);
+            videoFramePlayer->updateFlowTrackPoints(regionPoints);
+        }
+    }
+
+    double sumFlowtrackArea = 0.0, flowrate = 0.0;
+    for(double trackarea : trackareas)
+    {
+        sumFlowtrackArea += trackarea;
+    }
+    flowrate = sumFlowtrackArea * 5.6 * 30 / 1000 / 5 / 1000 / trackareas.size();
+
+    flowrateItem->setText(QString::number(flowrate));
 }
 
 void Widget::asyncUpdateAvaliableCameras()
@@ -516,17 +701,56 @@ void Widget::updateRecordTime()
     mRecordDuratiom = mRecordDuratiom.addMSecs(mRecordBeginDateTime.msecsTo(QDateTime::currentDateTime()));
 }
 
+void Widget::insertOneVideoRecord()
+{
+    int currentRowCount = mUI.videorecord->rowCount();
+    mUI.videorecord->setRowCount(currentRowCount + 1);
+
+    QString videoAbsPath = mRecordVideoAbsFileInfo.absoluteFilePath();
+
+    QTableWidgetItem* pathItem = new QTableWidgetItem;
+    pathItem->setText(videoAbsPath);
+    pathItem->setToolTip(videoAbsPath);
+
+    QTableWidgetItem* durationItem = new QTableWidgetItem;
+    durationItem->setText(mUI.video_time_display->text());
+
+    QTableWidgetItem* flowrateItem = new QTableWidgetItem;
+    flowrateItem->setText(QStringLiteral("等待中"));
+
+    mUI.videorecord->setItem(currentRowCount, 0, pathItem);
+    mUI.videorecord->setItem(currentRowCount, 1, durationItem);
+    mUI.videorecord->setItem(currentRowCount, 2, flowrateItem);
+}
+
+void Widget::insertOneVideoRecord(const QFileInfo &videoFileinfo)
+{
+    int currentRowCount = mUI.videorecord->rowCount();
+    mUI.videorecord->setRowCount(currentRowCount + 1);
+
+    QString videoAbsPath = videoFileinfo.absoluteFilePath();
+
+    QTableWidgetItem* pathItem = new QTableWidgetItem;
+    pathItem->setText(videoFileinfo.absoluteFilePath());
+    pathItem->setToolTip(videoFileinfo.absoluteFilePath());
+
+    QTableWidgetItem* durationItem = new QTableWidgetItem;
+    durationItem->setText("/");
+
+    QTableWidgetItem* flowrateItem = new QTableWidgetItem;
+    flowrateItem->setText(QStringLiteral("等待中"));
+
+    mUI.videorecord->setItem(currentRowCount, 0, pathItem);
+    mUI.videorecord->setItem(currentRowCount, 1, durationItem);
+    mUI.videorecord->setItem(currentRowCount, 2, flowrateItem);
+}
+
 /**********AsyncVideoRecorder**********/
 AsyncVideoRecorder::AsyncVideoRecorder(cv::VideoWriter& videoWriter):
     mRecoring(false), mVideoWriter(videoWriter), mCacheIndex(0), mWriteIndex(0)
 {
     mCacheQueue.resize(2048);
     mOccupied.resize(2048, false);
-}
-
-AsyncVideoRecorder::~AsyncVideoRecorder()
-{
-
 }
 
 void AsyncVideoRecorder::startRecord()
@@ -619,26 +843,20 @@ void AsyncVideoRecorder::run()
 }
 /**********AsyncVideoRecorder**********/
 
-/**********AsyncFlowrateCalculator**********/
-AsyncFlowrateCalculator::AsyncFlowrateCalculator() :
-    mImageSize(0), mCalculating(false), mCacheIndex(0), mCalculateIndex(0)
-{
-    mCacheQueue.resize(2048);
-    mOccupied.resize(2048, false);
-}
-
-AsyncFlowrateCalculator::~AsyncFlowrateCalculator()
+/**********AsyncSharpnessCalculator**********/
+AsyncSharpnessCalculator::AsyncSharpnessCalculator() :
+    mImageSize(0), mCalculating(false), mOccupied(false)
 {
 
 }
 
-void AsyncFlowrateCalculator::setImageFormat(const QImage &image, int imageSize)
+void AsyncSharpnessCalculator::setImageFormat(const QImage &image, int imageSize)
 {
     mCalculateImage = image;
     mImageSize = imageSize;
 }
 
-void AsyncFlowrateCalculator::startCalculate()
+void AsyncSharpnessCalculator::startCalculate()
 {
     auto lambdaSlotCheckRecordFinish = [&](){
         if (this->isRunning() && mCalculating)
@@ -655,19 +873,16 @@ void AsyncFlowrateCalculator::startCalculate()
     mEventLoop.exec();
 }
 
-bool AsyncFlowrateCalculator::calculating()
+bool AsyncSharpnessCalculator::calculating()
 {
     return mCalculating;
 }
 
-void AsyncFlowrateCalculator::stopCalculate()
+void AsyncSharpnessCalculator::stopCalculate()
 {
     auto lambdaSlotCheckRecordFinish = [&](){
         if (!this->isRunning())
         {
-            mCacheIndex = 0;
-            mCalculateIndex = 0;
-            mOccupied.resize(2048, false);
             this->quit();
             QTimer::singleShot(0, &mEventLoop, &QEventLoop::quit);
         }
@@ -681,46 +896,32 @@ void AsyncFlowrateCalculator::stopCalculate()
     mEventLoop.exec();
 }
 
-void AsyncFlowrateCalculator::cache(const cv::Mat &mat)
+void AsyncSharpnessCalculator::cache(const cv::Mat &mat)
 {
     lock _lock;
 
-    if (mOccupied[mCacheIndex])
-    {
-        return;
-    }
-
-    mCacheQueue[mCacheIndex] = mat;
-    mOccupied[mCacheIndex++] = true;
-
-    if (mCacheIndex == 2048)
-    {
-        mCacheIndex = 0;
-    }
+    mMat = mat;
+    mOccupied = true;
 }
 
-void AsyncFlowrateCalculator::run()
+void AsyncSharpnessCalculator::run()
 {
     QImage image;
 
     mCalculating = true;
     while (true)
     {
-        if (mOccupied[mCalculateIndex])
+        if (mOccupied)
         {
             lock _lock;
-            const cv::Mat& writeMat = mCacheQueue[mCalculateIndex];
-            memcpy(mCalculateImage.bits(), writeMat.data, mImageSize);
+
+            memcpy(mCalculateImage.bits(), mMat.data, mImageSize);
+            mOccupied = false;
 
             double shaprness = Flowrate::getImageSharpness(mCalculateImage);
             emit signalUpdateSharpness(shaprness);
 
-            mOccupied[mCalculateIndex++] = false;
-
-            if (mCalculateIndex == 2048)
-            {
-                mCalculateIndex = 0;
-            }
+            QThread::msleep(10);
         }
         else if (!mCalculating)
         {
@@ -728,4 +929,32 @@ void AsyncFlowrateCalculator::run()
         }
     }
 }
-/**********AsyncFlowrateCalculator**********/
+/**********AsyncSharpnessCalculator**********/
+
+/**********AsyncFlowTrackAreaCalculator**********/
+AsyncFlowTrackAreaCalculator::AsyncFlowTrackAreaCalculator(QVector<QImage>& imagelist)
+{
+    mImagelist = std::move(imagelist);
+}
+
+AsyncFlowTrackAreaCalculator::~AsyncFlowTrackAreaCalculator()
+{
+    this->quit();
+}
+
+QVector<double>& AsyncFlowTrackAreaCalculator::getFlowtrackArea()
+{
+    return mFlowtrackArea;
+}
+
+QVector<RegionPoints>& AsyncFlowTrackAreaCalculator::getFlowtrackRegionPoints()
+{
+    return mFlowtrackRegionPoints;
+}
+
+void AsyncFlowTrackAreaCalculator::run()
+{
+    Flowrate::calFlowTrackAreas(mImagelist, mFlowtrackArea, mFlowtrackRegionPoints);
+    emit signalUpdateTrackArea(this);
+}
+/**********AsyncFlowTrackAreaCalculator**********/

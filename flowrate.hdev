@@ -24,10 +24,10 @@
 <l>Areas := []</l>
 <l>dev_update_off()</l>
 <c></c>
-<l>firstIndex := 0</l>
+<l>firstIndex := 1</l>
 <c></c>
 <c>* 首帧预处理 对应的变量用在后续的后帧缓存</c>
-<l>pre_process (ImagePrev, ImagePrevGauss, RegionConnectedPrev, NeedSplitRegionsPrev, 'D:/codes/PicAndTemplate/EV_PIC/', firstIndex, Width, Height)</l>
+<l>pre_process (ImagePrev, ImagePrevGauss, RegionConnectedPrev, NeedSplitRegionsPrev, 'D:/codes/flowrate/data/20210607163032cut_1733_1854/', firstIndex, Width, Height)</l>
 <c></c>
 <c>***************************************血管分段BEGIN***************************************</c>
 <c>* 清晰度算法另作函数split_vessel_region单独调用 </c>
@@ -42,22 +42,22 @@
 <c>***************************************血管分段END***************************************</c>
 <c></c>
 <c>* 遍历图像序列</c>
-<l>for I:=firstIndex+1 to firstIndex+100 by 1</l>
+<l>for I:=firstIndex+1 to firstIndex+99 by 1</l>
 <c>    * 前帧血管区域判空 若为空 next one</c>
 <l>    area_center(NeedSplitRegionsPrev, AreaNeedSplitRegionsPrev, useless, useless)</l>
 <l>    if(|AreaNeedSplitRegionsPrev| == 0 or -1 == AreaNeedSplitRegionsPrev)</l>
-<l>        pre_process (ImagePrev, ImagePrevGauss, RegionConnectedPrev, NeedSplitRegionsPrev, 'D:/codes/PicAndTemplate/EV_PIC/', I, Width, Height)</l>
+<l>        pre_process (ImagePrev, ImagePrevGauss, RegionConnectedPrev, NeedSplitRegionsPrev, 'D:/codes/flowrate/data/20210607163032cut_1733_1854/', I, Width, Height)</l>
 <l>        continue</l>
 <l>    endif</l>
 <c>    </c>
 <c>    * 后一帧预处理</c>
-<l>    pre_process (ImageRear, ImageRearGauss, RegionConnectedRear, NeedSplitRegionsRear, 'D:/codes/PicAndTemplate/EV_PIC/', I, Width, Height)</l>
+<l>    pre_process (ImageRear, ImageRearGauss, RegionConnectedRear, NeedSplitRegionsRear, 'D:/codes/flowrate/data/20210607163032cut_1733_1854/', I, Width, Height)</l>
 <c>    </c>
 <c>    * 后帧血管区域判空 若为空 next one</c>
 <l>    area_center(NeedSplitRegionsRear, AreaNeedSplitRegionsRear, useless, useless)</l>
 <l>    if(|AreaNeedSplitRegionsRear| == 0 or -1 == AreaNeedSplitRegionsRear)</l>
 <l>        I := I + 1</l>
-<l>        pre_process (ImagePrev, ImagePrevGauss, RegionConnectedPrev, NeedSplitRegionsPrev, 'D:/codes/PicAndTemplate/EV_PIC/', I, Width, Height)</l>
+<l>        pre_process (ImagePrev, ImagePrevGauss, RegionConnectedPrev, NeedSplitRegionsPrev, 'D:/codes/flowrate/data/20210607163032cut_1733_1854/', I, Width, Height)</l>
 <l>        continue</l>
 <l>    endif</l>
 <c>    </c>
@@ -161,7 +161,7 @@
 <l>*     dev_display(NeedSplitRegionsPrevRear)</l>
 <c>    </c>
 <c>    * 输出膨胀后的血管检测区域 调试用</c>
-<l>*     debug_output_vesselConnect (NeedSplitRegionsPrevRear, ImagePrev, ImageRear, 'D:/codes/PicAndTemplate/EV_PIC/1_CellTrack/_vesselConnect', I)</l>
+<l>    debug_output_vesselConnect (NeedSplitRegionsPrevRear, ImagePrev, ImageRear, 'D:/codes/flowrate/data/20210607163032cut_1733_1854/1_CellTrack/_vesselConnect', I)</l>
 <c>        </c>
 <c>    * 计算前后两帧的区别</c>
 <l>    reduce_domain(ImagePrevGauss, NeedSplitRegionsPrevRear, ImagePrevCalRegion)</l>
@@ -187,7 +187,7 @@
 <l>    dyn_threshold(ImageCellTrackRegion, ImageMean, RegionCellTrack, 6, 'light')</l>
 <c>    </c>
 <c>    * 输出前后帧血管截图 调试用</c>
-<l>*     debug_output_calRegion_Prev_Rear(ImagePrevCalRegionEquHisto, ImageRearCalRegionEquHisto, 'D:/codes/PicAndTemplate/EV_PIC/1_CellTrack/calRegion', I)</l>
+<l>    debug_output_calRegion_Prev_Rear(ImagePrevCalRegionEquHisto, ImageRearCalRegionEquHisto, 'D:/codes/flowrate/data/20210607163032cut_1733_1854/1_CellTrack/calRegion', I)</l>
 <c>    </c>
 <c>    * 输出/调试显示</c>
 <l>*     boundary(RegionCellTrack, RegionCellTrackBorder, 'inner')</l>
@@ -198,7 +198,7 @@
 <l>*     stop()</l>
 <c>    </c>
 <c>    * debug输出用的图像 1.ImageCellTrackR 细胞运动路径图 2.ImageCellTrack_bg_R 带背景(bg)的细胞运动路径图</c>
-<l>*     debug_output_track_and_track_bg(ImagePrev, NeedSplitRegionsPrevRear, RegionCellTrack, Width, Height, 'D:/codes/PicAndTemplate/EV_PIC/1_CellTrack/track', I)</l>
+<l>    debug_output_track_and_track_bg(ImagePrev, NeedSplitRegionsPrevRear, RegionCellTrack, Width, Height, 'D:/codes/flowrate/data/20210607163032cut_1733_1854/1_CellTrack/track', I)</l>
 <c></c>
 <c>    * 计算流动轨迹面积</c>
 <c>    * 令 红细胞流速(mm/ms) = 流动轨迹面积(px) * 像素尺寸(mm/px) / 放大倍率 / 前后帧时间差(ms)</c>
@@ -490,6 +490,12 @@
 <body>
 <c>* 面积大于4000px的血管区域才进行分割</c>
 <l>select_shape(RegionConnected, NeedSplitRegions, 'area', 'and', 4000, Width*Height)</l>
+<c></c>
+<l>count_obj(NeedSplitRegions, NumberNeedSplitRegions)</l>
+<l>if(NumberNeedSplitRegions&lt;=0)</l>
+<l>    return()</l>
+<l>endif</l>
+<c></c>
 <l>union1(NeedSplitRegions, UnionNeedSplitRegions)</l>
 <c></c>
 <c>* 求血管区域骨骼(Skeleton)及其分叉点(JuncPoints) 端点(EndPoints)没用</c>

@@ -16,37 +16,42 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 INCLUDEPATH += \
-    ../libs/AVTCamera/include/ \
-    ../libs/AVTCamera/include/ \
-    ../libs/AVTCamera/include/VimbaC/ \
-    ../libs/AVTCamera/include/VimbaCPP/ \
-    ../libs/daheng/include/ \
-    ../libs/HALCON/include/ \
-    ../libs/HALCON/include/halconcpp/ \
-    ../libs/opencv/include/ \
-    ../libs/opencv/include/opencv2/ \
+    $$PWD/libs/AVTCamera/include/ \
+    $$PWD/libs/AVTCamera/include/ \
+    $$PWD/libs/AVTCamera/include/VimbaC/ \
+    $$PWD/libs/AVTCamera/include/VimbaCPP/ \
+    $$PWD/libs/daheng/include/ \
+    $$PWD/libs/HALCON/include/ \
+    $$PWD/libs/HALCON/include/halconcpp/ \
+    $$PWD/libs/opencv/include/ \
+    $$PWD/libs/opencv/include/opencv2/ \
+    $$PWD/libs/ffmpeg/include/ \
 
 SOURCES += \
-    main.cpp \
-    widget.cpp \
-    flowrate.cpp \
-    CameraParamWidget.cpp \
+    $$PWD/VideoAnalyser.cpp \
+    $$PWD/main.cpp \
+    $$PWD/widget.cpp \
+    $$PWD/flowrate.cpp \
+    $$PWD/CameraParamWidget.cpp \
 
 HEADERS += \
-    widget.h \
-    flowrate.h \
-    CameraParamWidget.h \
-    CameraObjectParamProxy.h \
+    $$PWD/VideoAnalyser.h \
+    $$PWD/widget.h \
+    $$PWD/flowrate.h \
+    $$PWD/CameraParamWidget.h \
+    $$PWD/CameraObjectParamProxy.h \
 
 FORMS += \
-    CameraParamWidget.ui \
-    widget.ui \
+    $$PWD/CameraParamWidget.ui \
+    $$PWD/widget.ui \
+    $$PWD/VideoAnalyser.ui \
 
 LIBS += \
-    ../libs/AVTCamera/lib/*.lib \
-    ../libs/daheng/lib/*.lib \
-    ../libs/HALCON/lib/*.lib \
-    ../libs/opencv/lib/*.lib \
+    $$PWD/libs/AVTCamera/lib/*.lib \
+    $$PWD/libs/daheng/lib/*.lib \
+    $$PWD/libs/HALCON/lib/*.lib \
+    $$PWD/libs/opencv/lib/*.lib \
+    $$PWD/libs/ffmpeg/lib/*.lib \
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

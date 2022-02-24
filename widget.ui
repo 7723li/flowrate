@@ -6,14 +6,14 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>972</width>
-    <height>649</height>
+    <width>1050</width>
+    <height>715</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <layout class="QHBoxLayout" name="horizontalLayout" stretch="2,0,1">
+  <layout class="QHBoxLayout" name="horizontalLayout" stretch="4,1,2">
    <item>
     <widget class="QOpenGLWidget" name="frame_displayer">
      <property name="minimumSize">
@@ -31,11 +31,8 @@
     </widget>
    </item>
    <item>
-    <layout class="QVBoxLayout" name="verticalLayout" stretch="1,0,0,0,0,0,0,0,1">
-     <property name="spacing">
-      <number>0</number>
-     </property>
-     <item>
+    <layout class="QGridLayout" name="gridLayout" rowstretch="1,0,0,0,0,0,0,0,0,1" columnstretch="2,1">
+     <item row="0" column="0">
       <spacer name="verticalSpacer_2">
        <property name="orientation">
         <enum>Qt::Vertical</enum>
@@ -48,7 +45,14 @@
        </property>
       </spacer>
      </item>
-     <item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="sharpnessLabel">
+       <property name="text">
+        <string>清晰度：</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
       <widget class="QLabel" name="sharpness">
        <property name="text">
         <string>0.0</string>
@@ -58,7 +62,14 @@
        </property>
       </widget>
      </item>
-     <item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="isSharpLabel">
+       <property name="text">
+        <string>是否清晰：</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1">
       <widget class="QLabel" name="isSharp">
        <property name="text">
         <string>否</string>
@@ -68,7 +79,7 @@
        </property>
       </widget>
      </item>
-     <item>
+     <item row="3" column="0">
       <spacer name="verticalSpacer_4">
        <property name="orientation">
         <enum>Qt::Vertical</enum>
@@ -81,7 +92,7 @@
        </property>
       </spacer>
      </item>
-     <item>
+     <item row="4" column="0" colspan="2">
       <widget class="QCheckBox" name="checkBoxAutoRecord">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -94,7 +105,14 @@
        </property>
       </widget>
      </item>
-     <item>
+     <item row="5" column="0">
+      <widget class="QLabel" name="continueRecordNumLabel">
+       <property name="text">
+        <string>连续录制视频数量</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="0">
       <spacer name="verticalSpacer_3">
        <property name="orientation">
         <enum>Qt::Vertical</enum>
@@ -107,7 +125,7 @@
        </property>
       </spacer>
      </item>
-     <item>
+     <item row="7" column="0" colspan="2">
       <widget class="QStackedWidget" name="begin_stop_record_stack">
        <property name="currentIndex">
         <number>0</number>
@@ -148,17 +166,7 @@
        </widget>
       </widget>
      </item>
-     <item>
-      <widget class="QLabel" name="video_time_display">
-       <property name="text">
-        <string>00:00:00</string>
-       </property>
-       <property name="alignment">
-        <set>Qt::AlignCenter</set>
-       </property>
-      </widget>
-     </item>
-     <item>
+     <item row="9" column="0">
       <spacer name="verticalSpacer">
        <property name="orientation">
         <enum>Qt::Vertical</enum>
@@ -171,17 +179,126 @@
        </property>
       </spacer>
      </item>
+     <item row="8" column="0" colspan="2">
+      <widget class="QLabel" name="video_time_display">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="text">
+        <string>00:00:00</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item row="5" column="1">
+      <widget class="QComboBox" name="continueRecordNum">
+       <item>
+        <property name="text">
+         <string>1</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>2</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>3</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>4</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>5</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>6</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>7</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>8</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>9</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>10</string>
+        </property>
+       </item>
+      </widget>
+     </item>
     </layout>
    </item>
    <item>
-    <widget class="QListWidget" name="videoRecordLists">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-    </widget>
+    <layout class="QGridLayout" name="gridLayout_4" rowstretch="0,1" columnstretch="1,0">
+     <item row="0" column="0">
+      <widget class="QLineEdit" name="importDir">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="placeholderText">
+        <string>请输入导入文件夹路径</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QPushButton" name="importButton">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="text">
+        <string>导入</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0" colspan="2">
+      <widget class="QTableWidget" name="videorecord">
+       <column>
+        <property name="text">
+         <string>视频路径</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>时长</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>全局平均流速</string>
+        </property>
+       </column>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>

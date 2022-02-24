@@ -2,25 +2,31 @@
 
 #include <QImage>
 #include <QVector>
+#include <QPoint>
+#include <QDebug>
 
 #include "HalconCpp.h"
 #include "HDevThread.h"
+
+using RegionPoints = QVector<QPoint>;
 
 using namespace HalconCpp;
 
 class Flowrate
 {
 public:
-    static double calFlowTrackAreas(QImage imagePrev, QImage imageRear);
+    static void calFlowTrackAreas(QImage imagePrev, QImage imageRear, double& trackArea, RegionPoints& regionPoints);
 
-    static QVector<double> calFlowTrackAreas(const QVector<QImage>& imagelist);
+    static void calFlowTrackAreas(const QVector<QImage>& imagelist, QVector<double>& trackAreas, QVector<RegionPoints>& regionPoints);
 
     static double getImageSharpness(const QImage& Image);
 
     static bool isSharp(double sharpness);
 
-protected:
-    static void splitVesselRegion(const QImage& image, const HObject& ImageGauss, const HObject& RegionConnected, HObject* RegionBranchs, HObject* RegionNodes);
+    static void getBoundaryVesselRegion(const QImage& image, RegionPoints& RegionBoundaryVesselPoints);
 
+    static void getSplitVesselRegion(const QImage& image, QVector<RegionPoints>& RegionBranchsPoints, QVector<RegionPoints>& RegionNodesPoints);
+
+protected:
     static void preProcess(const QImage& image, HObject *ImageGauss, HObject *RegionConnected, HObject *ho_RegionUnion);
 };

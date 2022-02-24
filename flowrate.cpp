@@ -1,15 +1,20 @@
 ﻿#include "flowrate.h"
 
-double Flowrate::calFlowTrackAreas(QImage imagePrev, QImage imageRear)
+void Flowrate::calFlowTrackAreas(QImage imagePrev, QImage imageRear, double &trackArea, RegionPoints &regionPoints)
 {
-    return calFlowTrackAreas(QVector<QImage>::fromStdVector(std::vector<QImage>({imagePrev, imageRear}))).front();
+    QVector<double> trackAreas;
+    QVector<RegionPoints> _regionPoints;
+    calFlowTrackAreas(QVector<QImage>::fromStdVector(std::vector<QImage>({imagePrev, imageRear})), trackAreas, _regionPoints);
+
+    trackArea = trackAreas[0];
+    regionPoints = _regionPoints[0];
 }
 
-QVector<double> Flowrate::calFlowTrackAreas(const QVector<QImage>& imagelist)
+void Flowrate::calFlowTrackAreas(const QVector<QImage> &imagelist, QVector<double> &trackAreas, QVector<RegionPoints> &regionPoints)
 {
     if(imagelist.size() < 2)
     {
-        return QVector<double>();
+        return;
     }
 
     HObject  ImagePrevGauss, RegionConnectedPrev, RegionUnionPrev;
@@ -19,7 +24,7 @@ QVector<double> Flowrate::calFlowTrackAreas(const QVector<QImage>& imagelist)
     HObject  ImageRearGaussTrans, RegionUnionPrevRear;
     HObject  ImagePrevCalRegion, ImageRearCalRegion, ROIintersection;
     HObject  ImagePrevCalRegionEquHisto, ImageRearCalRegionEquHisto;
-    HObject  RegionCellTrack, ImagePrevCalRegionInvert;
+    HObject  RegionCellTrack, ImagePrevCalRegionInvert, BorderRegionCellTrack;
     HObject  ImageRearCalRegionInvert, ImageCellTrackRegion, ImageMean;
 
     HTuple  AreaRegionUnionPrev, useless, AreaRegionUnionRear;
@@ -30,8 +35,10 @@ QVector<double> Flowrate::calFlowTrackAreas(const QVector<QImage>& imagelist)
     HTuple  AreaRegionIntersect, RowRegionIntersect, ColumnRegionIntersect;
     HTuple  RegionCellTracksArea, RegionCellTracksRow;
     HTuple  RegionCellTracksColumn;
+    HTuple BorderRegionCellTrackRows, BorderRegionCellTrackCols;
 
-    QVector<double> flowTrackAreas(imagelist.size(), 0);
+    trackAreas = QVector<double>(imagelist.size() - 1, 0);
+    regionPoints = QVector<RegionPoints>(imagelist.size() - 1);
 
     //首帧预处理 对应的变量用在后续的后帧缓存
     preProcess(imagelist[0], &ImagePrevGauss, &RegionConnectedPrev, &RegionUnionPrev);
@@ -193,14 +200,20 @@ QVector<double> Flowrate::calFlowTrackAreas(const QVector<QImage>& imagelist)
         //以大恒为例 若算出AB帧之间轨迹面积为1000px 像素尺寸为常量5.6um/px 放大倍率为常量5 帧率为常量30fps
         //则AB帧之间的流速为 1000 * (5.6/1000) / 5 / (1000/30) = 5.6 / 5 / 1000 * 30 = 0.0336mm/ms
         AreaCenter(RegionCellTrack, &RegionCellTracksArea, &RegionCellTracksRow, &RegionCellTracksColumn);
-        flowTrackAreas[i - 1] = RegionCellTracksArea.D();
+        trackAreas[i - 1] = RegionCellTracksArea.D();
+
+        Boundary(RegionCellTrack, &BorderRegionCellTrack, "inner");
+        GetRegionPoints(BorderRegionCellTrack, &BorderRegionCellTrackRows, &BorderRegionCellTrackCols);
+        int BorderRegionCellTrackPointCount = BorderRegionCellTrackRows = BorderRegionCellTrackRows.TupleLength();
+        for(int j = 0; j < BorderRegionCellTrackPointCount; ++j)
+        {
+            regionPoints[i - 1].push_back(QPoint(BorderRegionCellTrackCols[j], BorderRegionCellTrackRows[j]));
+        }
 
         //后帧变前帧
         ImagePrevGauss = ImageRearGauss;
         RegionUnionPrev = RegionUnionRear;
     }
-
-    return flowTrackAreas;
 }
 
 double Flowrate::getImageSharpness(const QImage &Image)
@@ -246,8 +259,26 @@ bool Flowrate::isSharp(double sharpness)
     return (sharpness >= 0.91 && sharpness < 1.195);
 }
 
-void Flowrate::splitVesselRegion(const QImage &image, const HObject &ImageGauss, const HObject &RegionConnected, HObject *RegionBranchs, HObject *RegionNodes)
+void Flowrate::getBoundaryVesselRegion(const QImage &image, RegionPoints &RegionBoundaryVesselPoints)
 {
+    HObject ImageGauss, RegionConnected, RegionUnion, RegionUnionBorder;
+
+    HTuple Rows, Cols;
+
+    preProcess(image, &ImageGauss, &RegionConnected, &RegionUnion);
+    Boundary(RegionUnion, &RegionUnionBorder, "inner");
+    GetRegionPoints(RegionUnionBorder, &Rows, &Cols);
+
+    RegionBoundaryVesselPoints = RegionPoints();
+    for(int i = 0; i < Rows; ++i)
+    {
+        RegionBoundaryVesselPoints.push_back(QPoint(Cols[i], Rows[i]));
+    }
+}
+
+void Flowrate::getSplitVesselRegion(const QImage &image, QVector<RegionPoints> &RegionBranchsPoints, QVector<RegionPoints> &RegionNodesPoints)
+{
+    HObject ImageGauss, RegionConnected, RegionUnion;
     HObject NeedSplitRegions, UnionNeedSplitRegions, skeleton;
     HObject EndPoints, JuncPoints;
     HObject ImageReduced, ImageEquHisto, Basins, watersheds;
@@ -257,15 +288,27 @@ void Flowrate::splitVesselRegion(const QImage &image, const HObject &ImageGauss,
     HObject BorderNeedSplitRegions, Circles, RegionBranchsMergeWithNodes;
     HObject Circle, Node, RawBranch, RegionIntersectionCN, RegionIntersectionCB;
     HObject RegionNotMergeBranchs, ConnectedBranchsMergeWithNodes, ConnectedNotMergeBranchs;
-    HObject UnionRegionBranchs, UnionRegionNodes;
+    HObject UnionRegionBranchs, UnionRegionNodes, RegionBranchs, RegionNodes, RegionBranch, RegionNode;
 
-    HTuple Number, Area123, useless;
+    HTuple NumberNeedSplitRegions, Number, Area123, useless;
     HTuple NumberRegionRawBranchs,NumbeRegionNodes;
     HTuple RowsJuncPoints, ColsJuncPoints, DistanceMin, DistanceMax;
     HTuple AreaCircle, AreaRegionIntersectionCN, AreaRegionIntersectionCB;
+    HTuple RegionBranchsCount, RegionNodesCount;
+    HTuple RegionBranchRows,RegionBranchCols, RegionNodeRows, RegionNodeCols;
+    HTuple I, J, K;
+
+    preProcess(image, &ImageGauss, &RegionConnected, &RegionUnion);
 
     // 面积大于4000px的血管区域才进行分割
     SelectShape(RegionConnected, &NeedSplitRegions, "area", "and", 4000, image.width() * image.height());
+
+    CountObj(NeedSplitRegions, &NumberNeedSplitRegions);
+    if(NumberNeedSplitRegions <= 0)
+    {
+        return;
+    }
+
     Union1(NeedSplitRegions, &UnionNeedSplitRegions);
 
     // 求血管区域骨骼(Skeleton)及其分叉点(JuncPoints) 端点(EndPoints)没用
@@ -281,13 +324,15 @@ void Flowrate::splitVesselRegion(const QImage &image, const HObject &ImageGauss,
     // 遍历Basins的每个区域块(A) 若A中包含至少一个属于JuncPoints的分叉点(B) 块(block)
     // 则认为A属于血管区域的结点区域(Node) 否则属于分支区域(Branch)
     // 注意：参考二叉树结构 分为树和子树 再分为结点和叶 此处不叫"叶"叫"分支"比较形象
+    GenRegionPoints(&UnionRegionBranchBlocks, HTuple(), HTuple());
+    GenRegionPoints(&UnionRegionNodeBlocks, HTuple(), HTuple());
     CountObj(Basins, &Number);
-    int number = Number.I();
-    for (int i = 1; i <= number; ++i)
+    for (int i = 1; i <= Number; ++i)
     {
         SelectObj(Basins, &ObjectSelected, i);
         Intersection(ObjectSelected, JuncPoints, &RegionIntersection);
         AreaCenter(RegionIntersection, &Area123, &useless, &useless);
+
         if(Area123 < 1)
         {
             Union2(UnionRegionBranchBlocks, ObjectSelected, &UnionRegionBranchBlocks);
@@ -319,19 +364,20 @@ void Flowrate::splitVesselRegion(const QImage &image, const HObject &ImageGauss,
     // 遍历Circles中的所有圆(A) A的圆点在结点区域内 因此圆A必然和至少1个结点区域(B)相交
     // 若A还能与若干个原始分支区域(C)相交 且相交面积达到圆面积的1/10 则可认为B和C是可连接起来的
     // 注意：此步骤的理论支撑大概就是 交叉点跟外边界的最小距离内的所有接触区域集合
-    int rowsJuncPoints = RowsJuncPoints.I(), numbeRegionNodes = NumbeRegionNodes.I(), numberRegionRawBranchs = NumberRegionRawBranchs.I();
-    for(int i = 1; i <= rowsJuncPoints; ++i)
+    GenRegionPoints(&RegionBranchsMergeWithNodes, HTuple(), HTuple());
+    int rowsJuncPointsLen = RowsJuncPoints.TupleLength();
+    for(int i = 1; i <= rowsJuncPointsLen; ++i)
     {
         SelectObj(Circles, &Circle, i);
         AreaCenter(Circle, &AreaCircle, &useless, &useless);
-        for(int j = 1; j <= numbeRegionNodes; ++j)
+        for(int j = 1; j <= NumbeRegionNodes; ++j)
         {
             SelectObj(RegionRawNodes, &Node, j);
             Intersection(Circle, Node, &RegionIntersectionCN);
             AreaCenter(RegionIntersectionCN, &AreaRegionIntersectionCN, &useless, &useless);
             if(AreaRegionIntersectionCN.TupleLength() == 1 && AreaRegionIntersectionCN > 0)
             {
-                for(int k = 1; k <= numberRegionRawBranchs; ++k)
+                for(int k = 1; k <= NumberRegionRawBranchs; ++k)
                 {
                     SelectObj(RegionRawBranchs, &RawBranch, k);
                     Intersection(Circle, RawBranch, &RegionIntersectionCB);
@@ -339,7 +385,7 @@ void Flowrate::splitVesselRegion(const QImage &image, const HObject &ImageGauss,
                     if(AreaRegionIntersectionCB.TupleLength() == 1 && AreaRegionIntersectionCB > 0)
                     {
                         Union2(RegionBranchsMergeWithNodes, Node, &RegionBranchsMergeWithNodes);
-                        Union2(RegionBranchsMergeWithNodes, RawBranch, &RegionBranchsMergeWithNodes);\
+                        Union2(RegionBranchsMergeWithNodes, RawBranch, &RegionBranchsMergeWithNodes);
                     }
                 }
             }
@@ -354,12 +400,45 @@ void Flowrate::splitVesselRegion(const QImage &image, const HObject &ImageGauss,
     // 最终得到的完整分支区域
     Connection(RegionBranchsMergeWithNodes, &ConnectedBranchsMergeWithNodes);
     Connection(RegionNotMergeBranchs, &ConnectedNotMergeBranchs);
-    ConcatObj(ConnectedBranchsMergeWithNodes, ConnectedNotMergeBranchs, RegionBranchs);
+    ConcatObj(ConnectedBranchsMergeWithNodes, ConnectedNotMergeBranchs, &RegionBranchs);
 
     // 最终得到的完整结点区域
-    Union1(*RegionBranchs, &UnionRegionBranchs);
+    Union1(RegionBranchs, &UnionRegionBranchs);
     Difference(UnionNeedSplitRegions, UnionRegionBranchs, &UnionRegionNodes);
-    Connection(UnionRegionNodes, RegionNodes);
+    Connection(UnionRegionNodes, &RegionNodes);
+
+    RegionBranchsPoints = QVector<RegionPoints>();
+    RegionNodesPoints = QVector<RegionPoints>();
+
+    CountObj(RegionBranchs, &RegionBranchsCount);
+    for(int i = 1; i <= RegionBranchsCount; ++i)
+    {
+        SelectObj(RegionBranchs, &RegionBranch, i);
+        GetRegionPoints(RegionBranch, &RegionBranchRows, &RegionBranchCols);
+
+        int regionBranchPointNumber = RegionNodeRows.TupleLength();
+        RegionPoints regionPoints;
+        for(int j = 0; j < regionBranchPointNumber; ++j)
+        {
+            regionPoints.push_back(QPoint(RegionBranchCols[j], RegionBranchRows[j]));
+        }
+        RegionBranchsPoints.push_back(regionPoints);
+    }
+
+    CountObj(RegionNodes, &RegionNodesCount);
+    for(int i = 1; i <= RegionNodesCount; ++i)
+    {
+        SelectObj(RegionNodes, &RegionNode, i);
+        GetRegionPoints(RegionNode, &RegionNodeRows, &RegionNodeCols);
+
+        int regionNodePointNumber = RegionNodeRows.TupleLength();
+        RegionPoints regionPoints;
+        for(int j = 0; j < regionNodePointNumber; ++j)
+        {
+            regionPoints.push_back(QPoint(RegionNodeCols[j], RegionNodeRows[j]));
+        }
+        RegionNodesPoints.push_back(regionPoints);
+    }
 }
 
 void Flowrate::preProcess(const QImage& image, HObject *ImageGauss, HObject *RegionConnected, HObject *RegionUnion)

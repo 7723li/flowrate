@@ -6,9 +6,13 @@
 #include <QPainter>
 #include <QKeyEvent>
 #include <QDir>
+#include <QEventLoop>
+#include <QFileInfo>
 
 #include <string>
 #include <mutex>
+
+#include "ui_widget.h"
 
 #include "opencv2/opencv.hpp"
 #include "opencv2/core/core.hpp"
@@ -17,8 +21,7 @@
 
 #include "CameraParamWidget.h"
 #include "flowrate.h"
-
-#include "ui_widget.h"
+#include "VideoAnalyser.h"
 
 class GenericCameraModule;
 
@@ -51,7 +54,6 @@ class AsyncVideoRecorder : public QThread
 
 public:
     explicit AsyncVideoRecorder(cv::VideoWriter& videoWriter);
-    virtual ~AsyncVideoRecorder() override;
 
     void startRecord();
 
@@ -79,9 +81,9 @@ private:
 
 /*!
 * @brief
-* 异步帧写入
+* 异步帧清晰度计算
 */
-class AsyncFlowrateCalculator : public QThread
+class AsyncSharpnessCalculator : public QThread
 {
     Q_OBJECT
 
@@ -93,8 +95,7 @@ class AsyncFlowrateCalculator : public QThread
     };
 
 public:
-    explicit AsyncFlowrateCalculator();
-    virtual ~AsyncFlowrateCalculator() override;
+    explicit AsyncSharpnessCalculator();
 
     void setImageFormat(const QImage& image, int imageSize);
 
@@ -118,10 +119,40 @@ private:
 
     bool mCalculating;
 
-    std::vector<cv::Mat> mCacheQueue;
-    std::vector<bool> mOccupied;
-    int mCacheIndex;
-    int mCalculateIndex;
+    cv::Mat mMat;
+    bool mOccupied;
+
+    QEventLoop mEventLoop;
+};
+
+/*!
+* @brief
+* 异步帧流动轨迹计算
+*/
+class AsyncFlowTrackAreaCalculator : public QThread
+{
+    Q_OBJECT
+
+public:
+    explicit AsyncFlowTrackAreaCalculator(QVector<QImage>& imagelist);
+    virtual ~AsyncFlowTrackAreaCalculator() override;
+
+    QVector<double>& getFlowtrackArea();
+
+    QVector<RegionPoints>& getFlowtrackRegionPoints();
+
+protected:
+    virtual void run() override;
+
+signals:
+    void signalUpdateTrackArea(AsyncFlowTrackAreaCalculator*);
+
+private:
+    QVector<QImage> mImagelist;
+    QVector<double> mFlowtrackArea;
+    QVector<RegionPoints> mFlowtrackRegionPoints;
+
+    bool mCalculating;
 
     QEventLoop mEventLoop;
 };
@@ -174,10 +205,26 @@ private slots:
 
     void slotAutoRecordChecked(int status);
 
+    void slotContinueRecordNumChanged(const QString& number);
+
+    void slotVideoRecordDoubleClick(const QModelIndex &index);
+
+    void slotImportDir();
+
+    void slotCloseVideoFramePlayer(VideoFramePlayer* videoFramePlayer);
+
+    void slotLoopCalcFlowTrack();
+
+    void slotUpdateTrackArea(AsyncFlowTrackAreaCalculator* asyncFlowTrackAreaCalculator);
+
 private:
     inline void asyncUpdateAvaliableCameras();
 
     inline void updateRecordTime();
+
+    inline void insertOneVideoRecord();
+
+    inline void insertOneVideoRecord(const QFileInfo& videoFileinfo);
 
 private:
     Ui_Widget mUI;
@@ -227,9 +274,18 @@ private:
     bool mIsUpdatingCameraList;                     // 是否正在更新相机列表
     bool mShowDebugMessage;                         // 显示调试信息
 
-    AsyncFlowrateCalculator mAsyncFlowrateCalculator;   // 异步计算图像清晰度 后续拓展成异步计算流速
+    AsyncSharpnessCalculator mAsyncFlowrateCalculator;   // 异步计算图像清晰度 后续拓展成异步计算流速
     double mSharpness;                              // 清晰度
     int mContinueSharpFrameCount;                   // 连续清晰的帧数
+    int mContinueRecordVideoCount;                  // 连续录制的视频数
 
     QTimer mAutoRecordTimeLimitTimer;               // 智能录制时长显示定时器 1000ms
+
+    QList<VideoFramePlayer*> mVideoFramePlayerList; // 图片查看控件列表
+
+    int mFlowTrackCalculatingNumer;                 // 正在计算流速的线程数量
+    QTimer mLoopCalcFlowTrackTimer;                 // 循环检查流速计算的定时去 1000ms
+    QMap<AsyncFlowTrackAreaCalculator*, QTableWidgetItem*> mMapFlowTrackThreadToFlowrateItem;   // 计算流速的线程 对应到 流速显示控件
+    QMap<int, QVector<double>> mMapVideoRecordRowToFlowtrackArea;                               // 视频记录行号 对应到 流动轨迹面积
+    QMap<int, QVector<RegionPoints>> mMapVideoRecordRowToFlowtrackRegionPoints;                 // 视频记录行号 对应到 流动轨迹坐标
 };
