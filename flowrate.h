@@ -28,5 +28,5 @@ public:
     static void getSplitVesselRegion(const QImage& image, QVector<RegionPoints>& RegionBranchsPoints, QVector<RegionPoints>& RegionNodesPoints);
 
 protected:
-    static void preProcess(const QImage& image, HObject *ImageGauss, HObject *RegionConnected, HObject *ho_RegionUnion);
+    static void preProcess(const QImage& image, HObject *ImageGauss, HObject *ho_RegionUnion);
 };
