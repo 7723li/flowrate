@@ -29,4 +29,6 @@ public:
 
 protected:
     static void preProcess(const QImage& image, HObject *ImageGauss, HObject *ho_RegionUnion);
+
+    static void getSplitVesselRegion(const HObject& RegionVesselUnion, HObject* RegionBranchs, HObject* RegionNodes);
 };

@@ -278,41 +278,13 @@ void Flowrate::getBoundaryVesselRegion(const QImage &image, RegionPoints &Region
 
 void Flowrate::getSplitVesselRegion(const QImage &image, QVector<RegionPoints> &RegionBranchsPoints, QVector<RegionPoints> &RegionNodesPoints)
 {
-    HObject ImageGauss, RegionVesselUnion, skeleton;
-    HObject EndPoints, JuncPoints;
-    HObject BorderNeedSplitRegions, Circles, UnionCircles;
-    HObject RawRegionBranchsWithLines, OpeningRawRegionBranchs, RawRegionBranchs;
-    HObject RegionBranchs, UnionRegionBranchs, UnionRegionNodes, RegionNodes, Branch, Node;
+    HObject ImageGauss, RegionVesselUnion;
+    HObject RegionBranchs, RegionNodes, Branch, Node;
 
-    HTuple RowsJuncPoints, ColsJuncPoints, DistanceMin, DistanceMax;
     HTuple RegionBranchsCount, RegionNodesCount, Rows, Cols;
 
     preProcess(image, &ImageGauss, &RegionVesselUnion);
-
-    // 求血管区域骨骼(Skeleton)及其分叉点(JuncPoints) 端点(EndPoints)没用
-    // 注意：骨骼，即中心线
-    Skeleton(RegionVesselUnion, &skeleton);
-    JunctionsSkeleton(skeleton, &EndPoints, &JuncPoints);
-
-    // 需要分割的血管区域的外边界(BorderNeedSplitRegions)
-    Boundary(RegionVesselUnion, &BorderNeedSplitRegions, "inner");
-
-    // 以JuncPoints中的各个交叉点为圆点 以JuncPoints中的各个交叉点到BorderNeedSplitRegions的最小距离为半径 作若干个圆(Circles)
-    GetRegionPoints(JuncPoints, &RowsJuncPoints, &ColsJuncPoints);
-    DistancePr(BorderNeedSplitRegions, RowsJuncPoints, ColsJuncPoints, &DistanceMin, &DistanceMax);
-    GenCircle(&Circles, RowsJuncPoints, ColsJuncPoints, DistanceMin);
-
-    // 在完整的血管区域上去掉这些圆 再做一次开运算去掉细线状的连接 得到分支区域
-    Union1(Circles, &UnionCircles);
-    Difference (RegionVesselUnion, Circles, &RawRegionBranchsWithLines);
-    OpeningCircle(RawRegionBranchsWithLines, &OpeningRawRegionBranchs, 3.5);
-    Connection(OpeningRawRegionBranchs, &RawRegionBranchs);
-    ClosingCircle(RawRegionBranchs, &RegionBranchs, 3.5);
-    Union1(RegionBranchs, &UnionRegionBranchs);
-
-    // 剩下的归为节点区域
-    Difference (RegionVesselUnion, UnionRegionBranchs, &UnionRegionNodes);
-    Connection(UnionRegionNodes, &RegionNodes);
+    getSplitVesselRegion(RegionVesselUnion, &RegionBranchs, &RegionNodes);
 
     CountObj(RegionBranchs, &RegionBranchsCount);
     RegionBranchsPoints = QVector<RegionPoints>(RegionBranchsCount.I());
@@ -368,4 +340,39 @@ void Flowrate::preProcess(const QImage& image, HObject *ImageGauss, HObject *Reg
 
     // 合并 检测到的分散血管区域 后面有用
     Union1(RegionConnected, RegionUnion);
+}
+
+void Flowrate::getSplitVesselRegion(const HObject &RegionVesselUnion, HObject *RegionBranchs, HObject *RegionNodes)
+{
+    HObject skeleton, EndPoints, JuncPoints;
+    HObject BorderNeedSplitRegions, Circles, UnionCircles;
+    HObject RawRegionBranchsWithLines, OpeningRawRegionBranchs, RawRegionBranchs;
+    HObject UnionRegionBranchs, UnionRegionNodes;
+
+    HTuple RowsJuncPoints, ColsJuncPoints, DistanceMin, DistanceMax;
+
+    // 求血管区域骨骼(Skeleton)及其分叉点(JuncPoints) 端点(EndPoints)没用
+    // 注意：骨骼，即中心线
+    Skeleton(RegionVesselUnion, &skeleton);
+    JunctionsSkeleton(skeleton, &EndPoints, &JuncPoints);
+
+    // 需要分割的血管区域的外边界(BorderNeedSplitRegions)
+    Boundary(RegionVesselUnion, &BorderNeedSplitRegions, "inner");
+
+    // 以JuncPoints中的各个交叉点为圆点 以JuncPoints中的各个交叉点到BorderNeedSplitRegions的最小距离为半径 作若干个圆(Circles)
+    GetRegionPoints(JuncPoints, &RowsJuncPoints, &ColsJuncPoints);
+    DistancePr(BorderNeedSplitRegions, RowsJuncPoints, ColsJuncPoints, &DistanceMin, &DistanceMax);
+    GenCircle(&Circles, RowsJuncPoints, ColsJuncPoints, DistanceMin);
+
+    // 在完整的血管区域上去掉这些圆 再做一次开运算去掉细线状的连接 得到分支区域
+    Union1(Circles, &UnionCircles);
+    Difference (RegionVesselUnion, Circles, &RawRegionBranchsWithLines);
+    OpeningCircle(RawRegionBranchsWithLines, &OpeningRawRegionBranchs, 3.5);
+    Connection(OpeningRawRegionBranchs, &RawRegionBranchs);
+    ClosingCircle(RawRegionBranchs, RegionBranchs, 3.5);
+    Union1(*RegionBranchs, &UnionRegionBranchs);
+
+    // 剩下的归为节点区域
+    Difference (RegionVesselUnion, UnionRegionBranchs, &UnionRegionNodes);
+    Connection(UnionRegionNodes, RegionNodes);
 }

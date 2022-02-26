@@ -226,7 +226,7 @@ void VideoFramePlayer::slotPaintSplitVesselRegion()
 
 void VideoFramePlayer::slotPaintFlowTrackRegion()
 {
-    if(mCurrentFrameIdnex >= mTotalFrameCount)
+    if(mCurrentFrameIdnex == 1)
     {
         return;
     }
