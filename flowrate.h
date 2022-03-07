@@ -15,9 +15,11 @@ using namespace HalconCpp;
 class Flowrate
 {
 public:
-    static void calFlowTrackAreas(QImage imagePrev, QImage imageRear, double& trackArea, RegionPoints& regionPoints);
+    static void calFlowTrackDistances(QImage imagePrev, QImage imageRear, double& trackDistances, RegionPoints& regionPoints);
 
-    static void calFlowTrackAreas(const QVector<QImage>& imagelist, QVector<double>& trackAreas, QVector<RegionPoints>& regionPoints);
+    static void calFlowTrackDistances(const QVector<QImage>& imagelist, QVector<double>& trackDistances, QVector<RegionPoints>& regionPoints);
+
+    static double calcFlowrateFromFlowTrackDistances(const QVector<double>& trackDistances, double fps, double pixelSize, int magnification);
 
     static double getImageSharpness(const QImage& Image);
 
@@ -25,10 +27,12 @@ public:
 
     static void getBoundaryVesselRegion(const QImage& image, RegionPoints& RegionBoundaryVesselPoints);
 
-    static void getSplitVesselRegion(const QImage& image, QVector<RegionPoints>& RegionBranchsPoints, QVector<RegionPoints>& RegionNodesPoints);
+    static void splitVesselRegion(const QImage& image, QVector<RegionPoints>& RegionsSplitedPoints);
 
 protected:
     static void preProcess(const QImage& image, HObject *ImageGauss, HObject *ho_RegionUnion);
 
-    static void getSplitVesselRegion(const HObject& RegionVesselUnion, HObject* RegionBranchs, HObject* RegionNodes);
+    static double getImageSharpness(const HObject& ImageGauss, const HObject& RegionUnion);
+
+    static void splitVesselRegion(const HObject& RegionVesselUnion, HObject* RegionsSplited);
 };

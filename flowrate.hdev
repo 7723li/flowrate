@@ -5,68 +5,70 @@
 <body>
 <l>dev_update_off()</l>
 <c></c>
-<c>***************************************清晰度BEGIN***************************************</c>
-<c>* 清晰度算法另作函数get_image_sharpnessx单独调用 在内部调用了自定义预处理函数pre_process </c>
-<c>* 合理清晰度暂定为[0.91, 1.195)</c>
-<c>* 以下为使用demo 测试集主要选用 V1001559 V1001559 vh(栅格垂直水平) white</c>
-<l>* dev_update_off()</l>
-<l>* Sharpnesses := []</l>
-<l>* for I := 0 to 540 by 1</l>
-<l>*     get_image_sharpness (Image, 'D:/codes/PicAndTemplate/white/', I$'04', Sharpness)</l>
-<l>*     Sharpnesses := [Sharpnesses, Sharpness]</l>
-<l>*     write_image(Image, 'png', 0, 'D:/codes/PicAndTemplate/white/Sharpness/' + I + '_'+ Sharpness + '.png')</l>
-<l>* endfor</l>
-<l>* tuple_sort(Sharpnesses, Sorted)</l>
-<l>* tuple_inverse(Sorted, Inverted)</l>
-<l>* tuple_sort_index(Sharpnesses, Indices)</l>
-<l>* tuple_inverse(Indices, Inverted1)</l>
-<c>***************************************清晰度END***************************************</c>
+<l>paths:=['D:/codes/PicAndTemplate/微循环测试视频/images/20210607161929cut_5698_5819/',\
+        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607161929cut_5862_5983/',\
+        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607161929cut_7183_7304/',\
+        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607161929cut_7335_7456/',\
+        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607161929cut_7393_7514/',\
+        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607162432cut_355_476/',\
+        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607162432cut_498_619/',\
+        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607162432cut_718_839/',\
+        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607163032cut_1670_1791/',\
+        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607163032cut_1733_1854/',\
+        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607163032cut_5525_5646/',\
+        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607163032cut_7755_7876/',\
+        'D:/codes/PicAndTemplate/微循环测试视频/images/20211208134526cut_73_194/',\
+        'D:/codes/PicAndTemplate/微循环测试视频/images/20211210233906cut_2126_2247/',\
+        'D:/codes/PicAndTemplate/V1001559/',\
+        'D:/codes/PicAndTemplate/EV_PIC/']</l>
+<l>path:='D:/codes/PicAndTemplate/微循环测试视频/images/20210607161929cut_5698_5819/'</l>
+<l>tuple_find(paths, path, PathIndex)</l>
 <c></c>
-<c>***************************************血管分段BEGIN***************************************</c>
-<c>* 清晰度算法另作函数split_vessel_region单独调用  在内部调用了自定义预处理函数pre_process </c>
-<c>* Branch分支 Node结点</c>
-<l>* split_vessel_region (Image, RegionBranchs, RegionNodes, 'C:/Users/7723/Desktop/codes/halcon/PicAndTemplate/V1001559/', firstIndex)</l>
+<c>* 这个循环是专门刷数据用的</c>
+<l>TupleAreasMean:=[]</l>
+<l>for PathIndex:=0 to |paths|-1 by 1</l>
+<l>path:=paths[PathIndex]</l>
+<l>dev_clear_window()</l>
+<l>dev_disp_text(paths[PathIndex], 'window', 'top', 'left', 'forest green', [], [])</l>
 <c></c>
-<l>* union1(RegionNodes, UnionRegionNodes)</l>
-<l>* dev_clear_window()</l>
-<l>* dev_display(RegionBranchs)</l>
-<l>* dev_display(UnionRegionNodes)</l>
-<c>***************************************血管分段END***************************************</c>
-<c></c>
-<c>***************************************消抖+流动轨迹面积BEGIN***************************************</c>
-<l>firstIndex := 0</l>
+<c>***************************************消抖+找到图像序列中稳定出现的区域BEGIN***************************************</c>
+<l>firstIndex := 1</l>
 <c></c>
 <c>* 首帧预处理 对应的变量用在后续的后帧缓存</c>
-<l>pre_process (ImagePrev, ImagePrevGauss, RegionUnionPrev, 'C:/Users/7723/Desktop/codes/halcon/PicAndTemplate/V1001559/', firstIndex, Width, Height)</l>
+<c>* 首帧必然清晰才开始录像</c>
+<l>pre_process (ImagePrev, ImagePrevGauss, RegionUnionPrev, path, firstIndex, Width, Height)</l>
 <c></c>
-<l>Areas := []</l>
+<c>* 记录合并后的血管区域</c>
+<l>gen_region_points(RegionCellTrackConcat, [], [])</l>
+<c></c>
+<c>* 记录的位移行/列/处理过的图像下标</c>
+<l>TupleDebugTransRows := [0]</l>
+<l>TupleDebugTransCols := [0]</l>
+<l>TupleProcessIndex := [firstIndex]</l>
+<c></c>
 <c>* 遍历图像序列</c>
-<l>for I:=firstIndex+1 to firstIndex+99 by 1</l>
-<c>    * 前帧血管区域判空 若为空 next one</c>
-<l>    area_center(RegionUnionPrev, AreaRegionUnionPrev, useless, useless)</l>
-<l>    if(|AreaRegionUnionPrev| == 0 or -1 == AreaRegionUnionPrev)</l>
-<l>        pre_process (ImagePrev, ImagePrevGauss, RegionUnionPrev, 'C:/Users/7723/Desktop/codes/halcon/PicAndTemplate/V1001559/', I, Width, Height)</l>
-<l>        continue</l>
-<l>    endif</l>
-<c>    </c>
+<l>for I:=firstIndex+1 to firstIndex+99 by 1    </l>
 <c>    * 后一帧预处理</c>
-<l>    pre_process (ImageRear, ImageRearGauss, RegionUnionRear, 'C:/Users/7723/Desktop/codes/halcon/PicAndTemplate/V1001559/', I, Width, Height)</l>
+<l>    pre_process (ImageRear, ImageRearGauss, RegionUnionRear, path, I, Width, Height)</l>
 <c>    </c>
 <c>    * 后帧血管区域判空 若为空 next one</c>
 <l>    area_center(RegionUnionRear, AreaRegionUnionRear, useless, useless)</l>
 <l>    if(|AreaRegionUnionRear| == 0 or -1 == AreaRegionUnionRear)</l>
-<l>        I := I + 1</l>
-<l>        pre_process (ImagePrev, ImagePrevGauss, RegionUnionPrev, 'C:/Users/7723/Desktop/codes/halcon/PicAndTemplate/V1001559/', I, Width, Height)</l>
 <l>        continue</l>
 <l>    endif</l>
 <c>    </c>
-<c>    * 调试显示 前后两帧的血管位置差异大不大</c>
-<l>*     dev_clear_window()</l>
-<l>*     dev_display(RegionUnionPrev)</l>
-<l>*     dev_display(RegionUnionRear)</l>
+<c>    * 不清晰的也不要 next one</c>
+<l>    get_image_sharpness (ImageRearGauss, RegionUnionRear, Sharpness)</l>
+<l>    is_sharp(Sharpness, isSharp)</l>
+<l>    if(isSharp==false)</l>
+<l>        continue</l>
+<l>    endif</l>
 <c>    </c>
-<c>    * 前后帧差异区域</c>
-<l>    difference(RegionUnionPrev, RegionUnionRear, RegionDifference)</l>
+<c>    * 记录处理了一帧的下缀</c>
+<l>    TupleProcessIndex := [TupleProcessIndex, I]</l>
+<c>    </c>
+<c>    * 前帧到后帧的差异区域</c>
+<l>    difference(RegionUnionRear, RegionUnionPrev, RegionDifference)</l>
 <c>    </c>
 <c>    * 计算差异区域在各行的宽度</c>
 <l>    dis_Row := []</l>
@@ -88,14 +90,14 @@
 <l>        dis_Col := [dis_Col, AreaCol]</l>
 <l>    endfor</l>
 <c>    </c>
-<c>    * 最大距离的正负作为粗瞄范围 方差作为步进粗瞄距离</c>
+<c>    * 最大距离的正负作为粗对齐范围 方差作为步进粗对齐距离</c>
 <l>    tuple_max(dis_Row, maxRowDis)</l>
 <l>    tuple_deviation(dis_Row, deviationRowDis)</l>
 <l>    tuple_max(dis_Col, maxColDis)</l>
 <l>    tuple_deviation(dis_Col, deviationColDis)</l>
 <c>    </c>
-<c>    * 粗瞄 找出一个横向移动后 能使前后帧血管区域重叠面积最大的差异区域高度 减少后面防抖移动的次数</c>
-<c>    * 插值方式采用比较粗糙的nearest_neighbor即可 后面浮点数处再采用比较精准的插值方法</c>
+<c>    * 粗对齐 找出一个横向纵向位移后 能使-&gt;前后帧血管区域重叠面积最大&lt;-的位移数值</c>
+<c>    * 注意：这里是为了减少后面细对齐位移的次数</c>
 <l>    maxIntersectAreaRow := 0</l>
 <l>    maxIntersectAreaCol := 0</l>
 <l>    maxIntersectArea := 0</l>
@@ -104,9 +106,9 @@
 <l>        for Col:=-maxColDis to maxColDis by deviationColDis</l>
 <l>            hom_mat2d_identity(HomMat2D)</l>
 <l>            hom_mat2d_translate(HomMat2D, Row, Col, HomMat2D)</l>
-<l>            affine_trans_region(RegionUnionRear, RegionUnionRearTrans, HomMat2D, 'nearest_neighbor')</l>
+<l>            affine_trans_region(RegionUnionPrev, RegionUnionPrevTrans, HomMat2D, 'nearest_neighbor')</l>
 <c>            </c>
-<l>            intersection(RegionUnionPrev, RegionUnionRearTrans, RegionIntersect)</l>
+<l>            intersection(RegionUnionRear, RegionUnionPrevTrans, RegionIntersect)</l>
 <l>            area_center(RegionIntersect, AreaRegionIntersect, RowRegionIntersect, ColumnRegionIntersect)</l>
 <l>            if(AreaRegionIntersect &gt; maxIntersectArea)</l>
 <l>                maxIntersectArea := AreaRegionIntersect</l>
@@ -116,250 +118,202 @@
 <l>        endfor</l>
 <l>    endfor</l>
 <c>    </c>
-<c>    * 细瞄 将前帧的血管区域移动至的重叠面积最大的地方 达到防抖的效果</c>
+<c>    * 细对齐 将前帧的血管区域移动至的重叠面积最大的地方 达到防抖的效果</c>
 <c>    * J循环是为了多找一次 提高精度</c>
+<l>    maxIntersectAreaRowCopy := maxIntersectAreaRow</l>
+<l>    maxIntersectAreaColCopy := maxIntersectAreaCol</l>
 <l>    for J:=0 to 1 by 1</l>
-<l>        for X:=-2.56 to 2.56 by 0.16</l>
-<l>            hom_mat2d_identity(HomMat2D)</l>
-<l>            hom_mat2d_translate(HomMat2D, maxIntersectAreaRow, maxIntersectAreaCol+X, HomMat2D)</l>
-<l>            affine_trans_region(RegionUnionRear, RegionUnionRearTrans, HomMat2D, 'constant')</l>
+<l>        for X:=-2.56 to 2.56 by 0.04</l>
+<l>            hom_mat2d_identity(HomMat2DPrevToRearTemp)</l>
+<l>            hom_mat2d_translate(HomMat2DPrevToRearTemp, maxIntersectAreaRow, maxIntersectAreaColCopy+X, HomMat2DPrevToRearTemp)</l>
+<l>            affine_trans_region(RegionUnionPrev, RegionUnionPrevTrans, HomMat2DPrevToRearTemp, 'nearest_neighbor')</l>
 <c>            </c>
-<l>            intersection(RegionUnionPrev, RegionUnionRearTrans, RegionIntersect)</l>
-<l>            area_center(RegionIntersect, AreaRegionIntersect, RowRegionIntersect, ColumnRegionIntersect)</l>
+<l>            intersection(RegionUnionPrevTrans, RegionUnionRear, RegionIntersect)</l>
+<l>            area_center(RegionIntersect, AreaRegionIntersect, useless, useless)</l>
 <l>            if(AreaRegionIntersect &gt; maxIntersectArea)</l>
 <l>                maxIntersectArea := AreaRegionIntersect</l>
-<l>                maxIntersectAreaCol := maxIntersectAreaCol+X</l>
+<l>                maxIntersectAreaCol := maxIntersectAreaColCopy+X</l>
 <l>            endif</l>
 <l>        endfor</l>
 <c>        </c>
-<l>        for Y:=-2.56 to 2.56 by 0.16</l>
-<l>            hom_mat2d_identity(HomMat2D)</l>
-<l>            hom_mat2d_translate(HomMat2D, maxIntersectAreaRow+Y, maxIntersectAreaCol, HomMat2D)</l>
-<l>            affine_trans_region(RegionUnionRear, RegionUnionRearTrans, HomMat2D, 'constant')</l>
+<l>        for Y:=-2.56 to 2.56 by 0.04</l>
+<l>            hom_mat2d_identity(HomMat2DPrevToRearTemp)</l>
+<l>            hom_mat2d_translate(HomMat2DPrevToRearTemp, maxIntersectAreaRowCopy+Y, maxIntersectAreaCol, HomMat2DPrevToRearTemp)</l>
+<l>            affine_trans_region(RegionUnionPrev, RegionUnionPrevTrans, HomMat2DPrevToRearTemp, 'nearest_neighbor')</l>
 <c>            </c>
-<l>            intersection(RegionUnionPrev, RegionUnionRearTrans, RegionIntersect)</l>
-<l>            area_center(RegionIntersect, AreaRegionIntersect, RowRegionIntersect, ColumnRegionIntersect)</l>
+<l>            intersection(RegionUnionPrevTrans, RegionUnionRear, RegionIntersect)</l>
+<l>            area_center(RegionIntersect, AreaRegionIntersect, useless, useless)</l>
 <l>            if(AreaRegionIntersect &gt; maxIntersectArea)</l>
 <l>                maxIntersectArea := AreaRegionIntersect</l>
-<l>                maxIntersectAreaRow := maxIntersectAreaRow+Y</l>
+<l>                maxIntersectAreaRow := maxIntersectAreaRowCopy+Y</l>
 <l>            endif</l>
 <l>        endfor</l>
 <l>    endfor</l>
 <c>    </c>
-<c>    * 最终找到 后帧对前帧的最佳移动位置</c>
-<l>    hom_mat2d_identity(HomMat2D)</l>
-<l>    hom_mat2d_translate(HomMat2D, maxIntersectAreaRow, maxIntersectAreaCol, HomMat2D)</l>
-<l>    affine_trans_region(RegionUnionRear, RegionUnionRearTrans, HomMat2D, 'constant')</l>
-<l>    affine_trans_image(ImageRearGauss, ImageRearGaussTrans, HomMat2D, 'constant', 'false')</l>
+<c>    * 最终找到最佳的前帧对齐到后帧的位移数值</c>
+<l>    hom_mat2d_identity(HomMat2DPrevToRear)</l>
+<l>    hom_mat2d_translate(HomMat2DPrevToRear, maxIntersectAreaRow, maxIntersectAreaCol, HomMat2DPrevToRear)</l>
+<l>    affine_trans_region(RegionUnionPrev, RegionUnionPrevTrans, HomMat2DPrevToRear, 'nearest_neighbor')</l>
 <c>    </c>
-<c>    * 合并前后帧血管区域 形成一个膨胀的、前后血管区域兼备的ROI</c>
-<c>    * 并计算连通区域 得到最终的ROI区域</c>
-<l>    union2(RegionUnionPrev, RegionUnionRearTrans, RegionUnionPrevRear)</l>
-<l>*     dev_clear_window()</l>
-<l>*     dev_display(ImageRearGaussTrans)</l>
-<l>*     dev_display(RegionUnionPrevRear)</l>
+<l>    TupleDebugTransRows := [TupleDebugTransRows, maxIntersectAreaRow]</l>
+<l>    TupleDebugTransCols := [TupleDebugTransCols, maxIntersectAreaCol]</l>
 <c>    </c>
-<c>    * 输出膨胀后的血管检测区域 调试用</c>
-<l>    debug_output_vesselConnect (RegionUnionPrevRear, ImagePrev, ImageRear, 'C:/Users/7723/Desktop/codes/halcon/PicAndTemplate/V1001559/1_CellTrack/_vesselConnect', I)</l>
+<c>    * 记录合并细胞轨迹</c>
+<l>    if(|TupleProcessIndex|&gt;2)</l>
+<c>        * 生成合成流动轨迹的掩膜</c>
+<l>        affine_trans_region(RegionCellTrackConcat, RegionCellTrackConcat, HomMat2DPrevToRear, 'nearest_neighbor')</l>
+<l>        smallest_rectangle1(RegionCellTrackConcat, RegionCellTrackMaskRow1, RegionCellTrackMaskColumn1, RegionCellTrackMaskRow2, RegionCellTrackMaskColumn2)</l>
+<l>        gen_rectangle1(RegionCellTrackMask, RegionCellTrackMaskRow1, RegionCellTrackMaskColumn1, RegionCellTrackMaskRow2, RegionCellTrackMaskColumn2)</l>
 <c>        </c>
-<c>    * 计算前后两帧的区别</c>
-<l>    reduce_domain(ImagePrevGauss, RegionUnionPrevRear, ImagePrevCalRegion)</l>
-<l>    reduce_domain(ImageRearGaussTrans, RegionUnionPrevRear, ImageRearCalRegion)</l>
+<c>        * 只要与掩膜重叠的部分</c>
+<l>        intersection(RegionUnionPrevTrans, RegionCellTrackMask, RegionUnionPrevTrans)</l>
+<l>        concat_obj(RegionCellTrackConcat, RegionUnionPrevTrans, RegionCellTrackConcat)</l>
+<l>    else</l>
+<l>        union1(RegionUnionPrevTrans, RegionCellTrackConcat)</l>
+<l>    endif</l>
 <c>    </c>
-<c>    * 由于后帧发生过移动 因此ROI截取到的位置不一定完全重叠</c>
-<l>    intersection(ImagePrevCalRegion, ImageRearCalRegion, ROIintersection)</l>
+<c>    * 调试显示</c>
+<l>    union1(RegionCellTrackConcat, DebugUnionRegionCellTrackConcat)</l>
+<l>    boundary(DebugUnionRegionCellTrackConcat, DebugBorderRegionCellTrackConcat, 'inner')</l>
+<l>    dev_clear_window()</l>
+<l>    dev_display(ImageRear)</l>
+<l>    dev_display(DebugBorderRegionCellTrackConcat)</l>
+<l>    dev_disp_text(paths[PathIndex], 'window', 'top', 'left', 'forest green', [], [])</l>
 <c>    </c>
-<c>    * 截取最终的血管区域</c>
-<l>    reduce_domain(ImagePrevGauss, ROIintersection, ImagePrevCalRegion)</l>
-<l>    reduce_domain(ImageRearGaussTrans, ROIintersection, ImageRearCalRegion)</l>
-<c>    </c>
-<c>    * 用帧差法检测流动轨迹</c>
-<c>    * 先直方图均衡降低亮度变化带来的影响</c>
-<c>    * 红细胞是低灰度 背景是高灰度 要获取红细胞轨迹 应该先反转灰度再相减</c>
-<l>    equ_histo_image(ImagePrevCalRegion, ImagePrevCalRegionEquHisto)</l>
-<l>    equ_histo_image(ImageRearCalRegion, ImageRearCalRegionEquHisto)</l>
-<l>    invert_image(ImagePrevCalRegionEquHisto, ImagePrevCalRegionInvert)</l>
-<l>    invert_image(ImageRearCalRegionEquHisto, ImageRearCalRegionInvert)</l>
-<l>    sub_image(ImageRearCalRegionInvert, ImagePrevCalRegionInvert, ImageCellTrackRegion, 1, 0)</l>
-<c>    </c>
-<l>    mean_image(ImageCellTrackRegion, ImageMean, 43, 43)</l>
-<l>    dyn_threshold(ImageCellTrackRegion, ImageMean, RegionCellTrack, 6, 'light')</l>
-<c>    </c>
-<c>    * 输出前后帧血管截图 调试用</c>
-<l>    debug_output_calRegion_Prev_Rear(ImagePrevCalRegionEquHisto, ImageRearCalRegionEquHisto, 'C:/Users/7723/Desktop/codes/halcon/PicAndTemplate/V1001559/1_CellTrack/calRegion', I)</l>
-<c>    </c>
-<c>    * 输出/调试显示</c>
-<l>*     boundary(RegionCellTrack, RegionCellTrackBorder, 'inner')</l>
-<l>*     dev_clear_window()</l>
-<l>*     dev_display(ImagePrev)</l>
-<l>*     dev_display(RegionCellTrackBorder)</l>
-<c>    </c>
-<l>*     stop()</l>
-<c>    </c>
-<c>    * debug输出用的图像 1.ImageCellTrackR 细胞运动路径图 2.ImageCellTrack_bg_R 带背景(bg)的细胞运动路径图</c>
-<l>    debug_output_track_and_track_bg(ImagePrev, RegionUnionPrevRear, RegionCellTrack, Width, Height, 'C:/Users/7723/Desktop/codes/halcon/PicAndTemplate/V1001559/1_CellTrack/track', I)</l>
-<c></c>
-<c>    * 计算流动轨迹面积</c>
-<c>    * 令 红细胞流速(mm/ms) = 流动轨迹面积(px) * 像素尺寸(mm/px) / 放大倍率 / 前后帧时间差(ms)</c>
-<c>    * 以大恒为例 若算出AB帧之间轨迹面积为1000px 像素尺寸为常量5.6um/px 放大倍率为常量5 帧率为常量30fps</c>
-<c>    * 则AB帧之间的流速为 1000 * (5.6/1000) / 5 / (1000/30) = 5.6 / 5 / 1000 * 30 = 0.0336mm/ms</c>
-<l>    area_center(RegionCellTrack, RegionCellTracksArea, RegionCellTracksRow, RegionCellTracksColumn)    </l>
-<l>    Areas := [Areas, RegionCellTracksArea]</l>
-<c></c>
-<c>    * 后帧变前帧</c>
-<l>    ImagePrev := ImageRear</l>
-<l>    ImagePrevGauss := ImageRearGauss</l>
-<l>    RegionUnionPrev := RegionUnionRear</l>
-<c>    </c>
-<l>*     stop()</l>
+<c>    * 前帧变后帧</c>
+<l>    if(I&lt;firstIndex+99)</l>
+<l>        ImagePrevGauss := ImageRearGauss</l>
+<l>        RegionUnionPrev := RegionUnionRear</l>
+<l>    endif</l>
 <l>endfor</l>
-<c>***************************************消抖+流动轨迹面积END***************************************</c>
+<c>***************************************消抖+找到图像序列中稳定出现的区域END***************************************</c>
 <c></c>
+<c>***************************************血管轨迹区域分段BEGIN***************************************</c>
+<c>* 分解</c>
+<l>union1(RegionCellTrackConcat, RegionUnionCellTrack)</l>
+<l>area_center(RegionUnionCellTrack, AreaRegionUnionCellTrack, useless, useless)</l>
+<l>if(AreaRegionUnionCellTrack&gt;0)</l>
+<l>    split_vessel_region (RegionUnionCellTrack, RegionsSplited)</l>
+<l>else</l>
+<l>    return()</l>
+<l>endif</l>
+<l>dev_clear_window()</l>
+<l>dev_display(RegionsSplited)</l>
+<l>dev_disp_text(paths[PathIndex], 'window', 'top', 'left', 'forest green', [], [])</l>
+<l>wait_seconds(0.5)</l>
+<c></c>
+<c>* 选择足够细长 面积足够大又不大得过分的一个区域作为观察区域</c>
+<l>region_features(RegionsSplited, 'inner_radius', RegionsSplitedInnerRadius)</l>
+<l>tuple_max(RegionsSplitedInnerRadius, RegionsSplitedInnerRadiusMax)</l>
+<l>MinInnerRadius:=4</l>
+<l>MaxInnerRadius:=10</l>
+<l>while(MinInnerRadius&lt;RegionsSplitedInnerRadiusMax)</l>
+<l>    select_shape(RegionsSplited, RegionsSplitedFilter, 'inner_radius', 'and', MinInnerRadius, MaxInnerRadius)</l>
+<l>    select_shape(RegionsSplitedFilter, RegionsSplitedFilter, 'area', 'and', 1000, 5000)</l>
+<l>    area_center(RegionsSplitedFilter, AreaRegionsSplitedFilter, useless, useless)</l>
+<l>    if(|AreaRegionsSplitedFilter|&gt;0)</l>
+<c>        * 根据权重 = 周长 * 面积开方选择一个原始观察区域</c>
+<l>        contlength(RegionsSplitedFilter, ContLength)</l>
+<l>        Grade:=ContLength*sqrt(AreaRegionsSplitedFilter)</l>
+<l>        tuple_sort_index(Grade, SortedGradeIndex)</l>
+<l>        select_obj(RegionsSplitedFilter, RawRegionObserve, SortedGradeIndex[|SortedGradeIndex|-1]+1)</l>
+<c>        </c>
+<c>        * 分解时做了一次闭运算 面积会略有损失 这里膨胀一下 取回与原区域重叠的部分作为正确的观察区域</c>
+<l>        dilation_circle(RawRegionObserve, DilationRawRegionObserve, 1.5)</l>
+<l>        intersection(RegionUnionCellTrack, DilationRawRegionObserve, RegionObserve)</l>
+<l>        break</l>
+<l>    else</l>
+<l>        MinInnerRadius:=MinInnerRadius+6</l>
+<l>        MaxInnerRadius:=MaxInnerRadius+6</l>
+<l>    endif</l>
+<l>endwhile</l>
+<c></c>
+<l>dev_display(RegionObserve)</l>
+<l>wait_seconds(0.5)</l>
+<c>***************************************血管轨迹区域分段END***************************************</c>
+<c></c>
+<c>***************************************计算流动轨迹距离BEGIN***************************************</c>
+<c>* @brief</c>
+<c>* 令 红细胞流速(um/s) = 流动轨迹距离(px) * 像素尺寸(um/px) / 放大倍率 / 前后帧时间差(s)</c>
+<c>* </c>
+<c>* 以大恒相机为例 像素尺寸取5.6mm/px 放大倍率取5 帧率取30fps</c>
+<c>* 若算出帧1与帧2之间轨迹距离为50px 则两帧之间的流速为 50 * 5.6 / 5 / (1/30) = 50 * 5.6 / 5 * 30 = 1680um/s</c>
+<c></c>
+<l>TrackDistances := []</l>
+<c>* 倒序遍历图像序列</c>
+<l>for I:=|TupleProcessIndex|-1 to 2 by -1</l>
+<c>    * 取出一帧轨迹区域</c>
+<c>    * 计算观测区域内的运动轨迹</c>
+<l>    select_obj(RegionCellTrackConcat, RegionCellTrackSelected, I)</l>
+<l>    intersection(RegionCellTrackSelected, RegionObserve, RegionCellTrackObserveRear)</l>
+<c>    </c>
+<c>    * 前帧同上</c>
+<l>    select_obj(RegionCellTrackConcat, RegionCellTrackSelected, I-1)</l>
+<l>    intersection(RegionCellTrackSelected, RegionObserve, RegionCellTrackObservePrev)</l>
+<c>   </c>
+<c>    * 计算前帧到后帧的流动形变</c>
+<l>    difference(RegionCellTrackObserveRear, RegionCellTrackObservePrev, UnionRegionCellTrackMotion)</l>
+<l>    connection(UnionRegionCellTrackMotion, ConnectedRegionCellTrackMotion)</l>
+<c>    </c>
+<c>    * 计算各个形变到前帧区域的距离</c>
+<l>    TupleTrackDistance:=[]</l>
+<l>    count_obj(ConnectedRegionCellTrackMotion, NumberConnectedRegionCellTrackMotion)</l>
+<l>    for J:=1 to NumberConnectedRegionCellTrackMotion by 1</l>
+<l>        select_obj(ConnectedRegionCellTrackMotion, RegionCellTrackMotion, J)</l>
+<c>        * 如果形变半径大于0.5 说明是已经形成孤岛的大形变(1.) 否则只是贴着前帧区域的小形变(2.)</c>
+<c>        * 1.形变外围半径的0.6倍 2.形变区域到前帧区域的最小距离</c>
+<c>        * 注意：1中不取直径是为了抵消遇到扁平孤岛时的严重畸变 取半径的0.7倍是为了弥补狭长孤岛的损失</c>
+<l>        region_features(RegionCellTrackMotion, 'inner_radius', InnerRadiusRegionCellTrackMotion)</l>
+<l>        if(|InnerRadiusRegionCellTrackMotion|&lt;=0  or InnerRadiusRegionCellTrackMotion &lt;=0)</l>
+<l>            continue</l>
+<l>        elseif(InnerRadiusRegionCellTrackMotion&gt;0.5)</l>
+<l>            region_features(RegionCellTrackMotion, 'outer_radius', DistanceRegionCellTrackMotion)</l>
+<l>            DistanceRegionCellTrackMotion:=DistanceRegionCellTrackMotion*0.6</l>
+<l>        else</l>
+<l>            distance_rr_min(RegionCellTrackMotion, RegionCellTrackObservePrev, DistanceRegionCellTrackMotion, useless, useless, useless, useless)</l>
+<l>        endif</l>
+<l>        TupleTrackDistance:=[TupleTrackDistance, DistanceRegionCellTrackMotion]</l>
+<l>    endfor</l>
+<c>    </c>
+<l>    tuple_sum(TupleTrackDistance, TrackDistance)</l>
+<l>    TrackDistances:=[TrackDistances, TrackDistance]</l>
+<c>    </c>
+<l>    if(I&gt;2)</l>
+<l>        RegionCellTrackObserveRear := RegionCellTrackObservePrev</l>
+<l>    endif</l>
+<c>    </c>
+<c>    * 根据上面前一帧位移到后一帧的数值 后一帧的轨迹和观察区域反向位移到与前一帧 自然地这里的前帧就变成下次循环里的后帧</c>
+<l>    hom_mat2d_identity(HomMat2DObserveRearToPrev)</l>
+<l>    hom_mat2d_translate(HomMat2DObserveRearToPrev, -TupleDebugTransRows[I], -TupleDebugTransCols[I], HomMat2DObserveRearToPrev)</l>
+<l>    affine_trans_region(RegionObserve, RegionObserve, HomMat2DObserveRearToPrev, 'nearest_neighbor')</l>
+<l>    affine_trans_region(RegionCellTrackConcat, RegionCellTrackConcat, HomMat2DObserveRearToPrev, 'nearest_neighbor')</l>
+<c>    </c>
+<c>    * 在前一帧的图像上调试显示观察的区域流动</c>
+<l>    pre_process(ImageOri, ImageGauss, RegionUnion, path, TupleProcessIndex[I-1], Width, Height)</l>
+<l>    boundary(RegionObserve, RegionObserveBorder, 'inner')</l>
+<l>    dev_clear_window()</l>
+<l>    dev_display(ImageOri)</l>
+<l>    dev_display(RegionCellTrackSelected)</l>
+<l>    dev_display(RegionObserveBorder)</l>
+<l>    dev_disp_text(paths[PathIndex], 'window', 'top', 'left', 'forest green', [], [])</l>
+<l>    wait_seconds(0.1)</l>
+<l>endfor</l>
+<c>***************************************计算流动轨迹距离END***************************************</c>
+<c></c>
+<c>***************************************调试显示流速计算BEGIN***************************************</c>
+<c>* 参考上面的轨迹距离计算公式 取图像序列的轨迹距离的平均值</c>
+<l>tuple_mean(TrackDistances, TrackDistancesMean)</l>
+<l>flowrate := TrackDistancesMean*5.6*30/5</l>
+<l>dev_disp_text('flowrate: '+flowrate+'um/s', 'window', 'bottom', 'left', 'forest green', [], [])</l>
+<c></c>
+<c>***************************************调试显示流速计算END***************************************</c>
+<c></c>
+<l>TupleAreasMean:=[TupleAreasMean, TrackDistancesMean]</l>
+<l>wait_seconds(2)</l>
+<l>endfor</l>
 </body>
 <docu id="main">
 <parameters/>
-</docu>
-</procedure>
-<procedure name="debug_output_vesselConnect">
-<interface>
-<io>
-<par name="RegionUnionPrevRear" base_type="iconic" dimension="0"/>
-<par name="ImagePrev" base_type="iconic" dimension="0"/>
-<par name="ImageRear" base_type="iconic" dimension="0"/>
-</io>
-<ic>
-<par name="path" base_type="ctrl" dimension="0"/>
-<par name="Index" base_type="ctrl" dimension="0"/>
-</ic>
-</interface>
-<body>
-<c>* 输出膨胀后的血管检测区域 调试用</c>
-<l>boundary(RegionUnionPrevRear, RegionUnionPrevRearBorder, 'inner')</l>
-<c></c>
-<l>copy_image(ImagePrev, ImageVesselR)</l>
-<l>copy_image(ImagePrev, ImageVesselG)</l>
-<l>copy_image(ImagePrev, ImageVesselB)</l>
-<c></c>
-<l>overpaint_region(ImageVesselR, RegionUnionPrevRearBorder, 255, 'fill')</l>
-<l>overpaint_region(ImageVesselG, RegionUnionPrevRearBorder, 0, 'fill')</l>
-<l>overpaint_region(ImageVesselB, RegionUnionPrevRearBorder, 0, 'fill')</l>
-<c></c>
-<l>compose3(ImageVesselR, ImageVesselG, ImageVesselB, ImageVesselRGB)</l>
-<c></c>
-<l>write_image(ImageVesselRGB, 'png', 0, path + (Index-1) + 'Prev.png')</l>
-<c></c>
-<l>copy_image(ImageRear, ImageVesselR)</l>
-<l>copy_image(ImageRear, ImageVesselG)</l>
-<l>copy_image(ImageRear, ImageVesselB)</l>
-<c></c>
-<l>overpaint_region(ImageVesselR, RegionUnionPrevRearBorder, 255, 'fill')</l>
-<l>overpaint_region(ImageVesselG, RegionUnionPrevRearBorder, 0, 'fill')</l>
-<l>overpaint_region(ImageVesselB, RegionUnionPrevRearBorder, 0, 'fill')</l>
-<c></c>
-<l>compose3(ImageVesselR, ImageVesselG, ImageVesselB, ImageVesselRGB)</l>
-<c></c>
-<l>write_image(ImageVesselRGB, 'png', 0, path + (Index-1) + 'Rear.png')</l>
-<c></c>
-<l>return ()</l>
-</body>
-<docu id="debug_output_vesselConnect">
-<parameters>
-<parameter id="ImagePrev"/>
-<parameter id="ImageRear"/>
-<parameter id="Index"/>
-<parameter id="RegionUnionPrevRear"/>
-<parameter id="path"/>
-</parameters>
-</docu>
-</procedure>
-<procedure name="debug_output_calRegion_Prev_Rear">
-<interface>
-<io>
-<par name="ImagePrevCalRegion" base_type="iconic" dimension="0"/>
-<par name="ImageRearCalRegion" base_type="iconic" dimension="0"/>
-</io>
-<ic>
-<par name="path" base_type="ctrl" dimension="0"/>
-<par name="Index" base_type="ctrl" dimension="0"/>
-</ic>
-</interface>
-<body>
-<l>area_center(ImagePrevCalRegion, Area, Row, Column)</l>
-<l>area_center(ImageRearCalRegion, Area1, Row1, Column1)</l>
-<l>if(|Area| and |Area1|)</l>
-<l>    write_image(ImagePrevCalRegion, 'png', 0, path + (Index-1) + '_' + Index + 'Prev.png')</l>
-<l>    write_image(ImageRearCalRegion, 'png', 0, path + (Index-1) + '_' + Index + 'Rear.png')</l>
-<l>endif</l>
-<l>return ()</l>
-</body>
-<docu id="debug_output_calRegion_Prev_Rear">
-<parameters>
-<parameter id="ImagePrevCalRegion"/>
-<parameter id="ImageRearCalRegion"/>
-<parameter id="Index"/>
-<parameter id="path"/>
-</parameters>
-</docu>
-</procedure>
-<procedure name="debug_output_track_and_track_bg">
-<interface>
-<io>
-<par name="ImagePrev" base_type="iconic" dimension="0"/>
-<par name="RegionUnionPrevRear" base_type="iconic" dimension="0"/>
-<par name="RegionCellTrack" base_type="iconic" dimension="0"/>
-</io>
-<ic>
-<par name="Width" base_type="ctrl" dimension="0"/>
-<par name="Height" base_type="ctrl" dimension="0"/>
-<par name="path" base_type="ctrl" dimension="0"/>
-<par name="Index" base_type="ctrl" dimension="0"/>
-</ic>
-</interface>
-<body>
-<l>boundary(RegionUnionPrevRear, RegionUnionPrevRearBorder, 'inner')</l>
-<l>boundary(RegionCellTrack, RegionCellTracksBorder, 'inner')</l>
-<c></c>
-<l>gen_image_const(ImageCellTrackR, 'byte', Width, Height)</l>
-<l>gen_image_const(ImageCellTrackG, 'byte', Width, Height)</l>
-<l>gen_image_const(ImageCellTrackB, 'byte', Width, Height)</l>
-<l>copy_image(ImagePrev, ImageCellTrack_bg_R)</l>
-<l>copy_image(ImagePrev, ImageCellTrack_bg_G)</l>
-<l>copy_image(ImagePrev, ImageCellTrack_bg_B)</l>
-<c></c>
-<l>overpaint_region(ImageCellTrackR, RegionUnionPrevRearBorder, 0, 'fill')</l>
-<l>overpaint_region(ImageCellTrackG, RegionUnionPrevRearBorder, 255, 'fill')</l>
-<l>overpaint_region(ImageCellTrackB, RegionUnionPrevRearBorder, 0, 'fill')</l>
-<c></c>
-<l>overpaint_region(ImageCellTrackR, RegionCellTrack, 255, 'fill')</l>
-<l>overpaint_region(ImageCellTrackG, RegionCellTrack, 0, 'fill')</l>
-<l>overpaint_region(ImageCellTrackB, RegionCellTrack, 0, 'fill')</l>
-<c></c>
-<l>overpaint_region(ImageCellTrack_bg_R, RegionUnionPrevRearBorder, 0, 'fill')</l>
-<l>overpaint_region(ImageCellTrack_bg_G, RegionUnionPrevRearBorder, 255, 'fill')</l>
-<l>overpaint_region(ImageCellTrack_bg_B, RegionUnionPrevRearBorder, 0, 'fill')</l>
-<c></c>
-<l>overpaint_region(ImageCellTrack_bg_R, RegionCellTracksBorder, 255, 'fill')</l>
-<l>overpaint_region(ImageCellTrack_bg_G, RegionCellTracksBorder, 0, 'fill')</l>
-<l>overpaint_region(ImageCellTrack_bg_B, RegionCellTracksBorder, 0, 'fill')</l>
-<c></c>
-<l>compose3(ImageCellTrackR, ImageCellTrackG, ImageCellTrackB, ImageRGB)</l>
-<l>compose3(ImageCellTrack_bg_R, ImageCellTrack_bg_G, ImageCellTrack_bg_B, ImageCellTrackRGB)</l>
-<c></c>
-<l>write_image(ImageRGB, 'png', 0, path + (Index-1) + '_' + Index + '.png')</l>
-<l>write_image(ImageCellTrackRGB, 'png', 0, path + 'bg_' + (Index-1) + '_' + Index + '.png')</l>
-<c>    </c>
-<l>return ()</l>
-</body>
-<docu id="debug_output_track_and_track_bg">
-<parameters>
-<parameter id="Height"/>
-<parameter id="ImagePrev"/>
-<parameter id="Index"/>
-<parameter id="RegionCellTrack"/>
-<parameter id="RegionUnionPrevRear"/>
-<parameter id="Width"/>
-<parameter id="path"/>
-</parameters>
 </docu>
 </procedure>
 <procedure name="pre_process">
@@ -402,7 +356,13 @@
 <l>connection(RegionClosing, RawRegionConnected)</l>
 <c></c>
 <c>* 根据面积筛选掉噪音</c>
-<l>select_shape(RawRegionConnected, RegionConnected, 'area', 'and', 50, Width*Height)</l>
+<l>area_center(RawRegionConnected, AreaRawRegionConnected, useless, useless)</l>
+<l>MinArea := 50</l>
+<l>tuple_max(AreaRawRegionConnected, MaxArea)</l>
+<l>if(MaxArea &lt; MinArea)</l>
+<l>    MinArea := 0</l>
+<l>endif</l>
+<l>select_shape(RawRegionConnected, RegionConnected, 'area', 'and', MinArea, MaxArea)</l>
 <c></c>
 <c>* 合并 检测到的分散血管区域 后面有用</c>
 <l>union1(RegionConnected, RegionUnion)</l>
@@ -423,20 +383,17 @@
 </procedure>
 <procedure name="get_image_sharpness">
 <interface>
-<oo>
-<par name="Image" base_type="iconic" dimension="0"/>
-</oo>
-<ic>
-<par name="Path" base_type="ctrl" dimension="0"/>
-<par name="Index" base_type="ctrl" dimension="0"/>
-</ic>
+<io>
+<par name="ImageGauss" base_type="iconic" dimension="0"/>
+<par name="RegionUnion" base_type="iconic" dimension="0"/>
+</io>
 <oc>
 <par name="Sharpness" base_type="ctrl" dimension="0"/>
 </oc>
 </interface>
 <body>
-<c>* 预处理函数中使用了均值滤波+动态阈值的方法获取连续的低灰度区域 可认为这些区域都是血管区域</c>
-<l>pre_process (Image, ImageGauss, RegionUnion, Path, Index, Width, Height)</l>
+<c>* C++端令有一公开接口版本输入的图像 需要调用预处理函数pre_process</c>
+<l>* pre_process (Image, ImageGauss, RegionUnion, Path, Index, Width, Height)</l>
 <c></c>
 <c>* 血管区域的外轮廓</c>
 <l>boundary(RegionUnion, BorderRegionUnion, 'inner')</l>
@@ -463,62 +420,157 @@
 </body>
 <docu id="get_image_sharpness">
 <parameters>
-<parameter id="Image"/>
-<parameter id="Index"/>
-<parameter id="Path"/>
+<parameter id="ImageGauss"/>
+<parameter id="RegionUnion"/>
 <parameter id="Sharpness"/>
 </parameters>
 </docu>
 </procedure>
 <procedure name="split_vessel_region">
 <interface>
+<io>
+<par name="RegionVesselUnion" base_type="iconic" dimension="0"/>
+</io>
 <oo>
-<par name="Image" base_type="iconic" dimension="0"/>
-<par name="RegionBranchs" base_type="iconic" dimension="0"/>
-<par name="RegionNodes" base_type="iconic" dimension="0"/>
+<par name="RegionsSplited" base_type="iconic" dimension="0"/>
 </oo>
-<ic>
-<par name="path" base_type="ctrl" dimension="0"/>
-<par name="Index" base_type="ctrl" dimension="0"/>
-</ic>
 </interface>
 <body>
-<l>pre_process(Image, ImageGauss, RegionVesselUnion, path, Index, Width, Height)</l>
+<c>* C++端令有一公开接口版本输入的图像 需要调用预处理函数pre_process</c>
+<l>* pre_process(Image, ImageGauss, RegionVesselUnion, path, Index, Width, Height)</l>
 <c></c>
-<c>* 求血管区域骨骼(Skeleton)及其分叉点(JuncPoints) 端点(EndPoints)没用</c>
-<c>* 注意：骨骼，即中心线</c>
-<l>skeleton (RegionVesselUnion, Skeleton)</l>
-<l>junctions_skeleton(Skeleton, EndPoints, JuncPoints)</l>
+<c>* 先做一次闭运算平滑轨迹边缘</c>
+<l>closing_circle(RegionVesselUnion, ClosingRegionVesselUnion, 3.5)</l>
+<c></c>
+<c>* 计算连续区域</c>
+<l>connection(ClosingRegionVesselUnion, RegionVesselConnection)</l>
+<c></c>
+<c>* 计算各个连续区域的像素面积</c>
+<l>area_center(RegionVesselConnection, AreaRegionVessel, useless, useless)</l>
+<c></c>
+<c>* 如果全部的连续区域都没有大于4000的 那就都不用分解 分解区域就等于连续区域</c>
+<l>tuple_max(AreaRegionVessel, MaxArea)</l>
+<l>if(MaxArea&lt;4000)</l>
+<l>    RegionsSplited := RegionVesselConnection</l>
+<l>    return()</l>
+<l>endif</l>
+<c></c>
+<c>* 连续像素大于4000px的(RegionVesselDoSplit)要进行分解</c>
+<l>select_shape(RegionVesselConnection, RegionVesselDoSplit, 'area', 'and', 4000, MaxArea)</l>
+<l>union1(RegionVesselDoSplit, UnionRegionVesselDoSplit)</l>
+<c></c>
+<c>* 小于等于4000(RegionVesselDoSplit)的直接归到已经分解好的(RegionsSplited)</c>
+<l>difference(RegionVesselConnection, RegionVesselDoSplit, RegionVesselDoNotSplit)</l>
+<l>gen_region_points(RegionsSplited, [], [])</l>
+<l>concat_obj(RegionsSplited, RegionVesselDoNotSplit, RegionsSplited)</l>
+<c></c>
+<c>* 求血管区域骨骼(Skeleton) 即中心线</c>
+<l>skeleton (UnionRegionVesselDoSplit, Skeleton)</l>
+<l>get_region_points(Skeleton, RowsSkeleton, ColumnsSkeleton)</l>
 <c></c>
 <c>* 需要分割的血管区域的外边界(BorderNeedSplitRegions)</c>
-<l>boundary (RegionVesselUnion, BorderNeedSplitRegions, 'inner')</l>
+<l>boundary (UnionRegionVesselDoSplit, BorderNeedSplitRegions, 'inner')</l>
 <c></c>
-<c>* 以JuncPoints中的各个交叉点为圆点 以JuncPoints中的各个交叉点到BorderNeedSplitRegions的最小距离为半径 作若干个圆(Circles)</c>
-<l>get_region_points(JuncPoints, RowsJuncPoints, ColsJuncPoints)</l>
-<l>distance_pr(BorderNeedSplitRegions, RowsJuncPoints, ColsJuncPoints, DistanceMin, DistanceMax)</l>
-<l>gen_circle(Circles, RowsJuncPoints, ColsJuncPoints, DistanceMin)</l>
+<c>* 求出中心线到外边界的最小距离</c>
+<l>distance_pr(BorderNeedSplitRegions, RowsSkeleton, ColumnsSkeleton, DistanceMin, useless)</l>
 <c></c>
-<c>* 在完整的血管区域上去掉这些圆 再做一次开运算去掉细线状的连接 得到分支区域</c>
-<l>union1(Circles, UnionCircles)</l>
-<l>difference (RegionVesselUnion, Circles, RawRegionBranchsWithLines)</l>
-<l>opening_circle(RawRegionBranchsWithLines, OpeningRawRegionBranchs, 3.5)</l>
-<l>connection(OpeningRawRegionBranchs, RawRegionBranchs)</l>
-<l>closing_circle(RawRegionBranchs, RegionBranchs, 3.5)</l>
-<l>union1(RegionBranchs, UnionRegionBranchs)</l>
+<c>* 过滤掉最小距离中的0 沿中心线作若干个圆 得到的圆集合无限贴近于外边界</c>
+<l>tuple_find(DistanceMin, 0, IndicesZeros)</l>
+<l>tuple_remove(DistanceMin, IndicesZeros, Radius)</l>
+<l>tuple_remove(RowsSkeleton, IndicesZeros, RowsSkeleton)</l>
+<l>tuple_remove(ColumnsSkeleton, IndicesZeros, ColumnsSkeleton)</l>
+<l>gen_circle(Circles, RowsSkeleton, ColumnsSkeleton, Radius)</l>
 <c></c>
-<c>* 剩下的归为节点区域</c>
-<l>difference (RegionVesselUnion, UnionRegionBranchs, UnionRegionNodes)</l>
-<l>connection(UnionRegionNodes, RegionNodes)</l>
+<c>* 将中心线上的圆 根据半径每差2px归为一个半径等级 [0, 2]等级1 [2, 4]等级2 [4, 6]等级3... </c>
+<l>tuple_max(Radius, MaxRadius)</l>
+<l>RadiusSection:=0</l>
+<l>while(RadiusSection&lt;MaxRadius)</l>
+<l>    select_shape(Circles, CirclesWidthSection, 'inner_radius', 'and', RadiusSection, RadiusSection+2)</l>
+<c>    </c>
+<l>    union1(CirclesWidthSection, Section)</l>
+<l>    if(RadiusSection&gt;1)</l>
+<l>        concat_obj(CircleSections, Section, CircleSections)</l>
+<l>    else</l>
+<l>        union1(Section, CircleSections)</l>
+<l>    endif</l>
+<c>    </c>
+<l>    RadiusSection:=RadiusSection+2</l>
+<l>endwhile</l>
+<c></c>
+<c>* 通过观察推测出 如果邻近的半径等级出现跨级 比如等级6与等级4之间为等级2 可以认为这个等级2的区域需要被断开 最终得到3个等级分别为6 2 4的[独立区域]</c>
+<c>* 但如果等级2出现在等级3与等级1之间 则可以认为这个等级2可以被保留 最终得到1个等级为3的[合并区域]</c>
+<c>* 因此需要从高等级往低等级进行匹配</c>
+<l>count_obj(CircleSections, Number)</l>
+<l>for I:=Number to 2 by -1</l>
+<c>    * 选择一个高等级</c>
+<l>    select_obj(CircleSections, CircleSectionBig, I)</l>
+<c>    </c>
+<c>    * 如果这个等级不是最高的 需要看看之前是否已经被合并了一部分 </c>
+<c>    * 比如6个等级中的第5级 在匹配第4级之前 需要先把已经被第6级匹配过的部分过滤掉 避免重复匹配造成分割区域重叠</c>
+<l>    if(I&lt;Number)</l>
+<l>        difference(CircleSectionBig, RegionsSplited, RegionConcatBig)</l>
+<l>    else</l>
+<l>        RegionConcatBig:=CircleSectionBig</l>
+<l>    endif</l>
+<c>    </c>
+<l>    dev_clear_window()</l>
+<l>    dev_display(RegionConcatBig)</l>
+<c>    </c>
+<l>    for J:=I-1 to 1 by -1</l>
+<c>        * 选择一个低等级</c>
+<l>        select_obj(CircleSections, CircleSectionSmall, J)</l>
+<c>        </c>
+<c>        * 低等级也需要过滤掉已经被合并的部分</c>
+<c>        * 比如第6级在匹配第5级时 第4级已经被合并了一部分 那么第5级在匹配第4级时 也需要过滤掉这些部分</c>
+<c>        * 注意：脑子不要套娃了！</c>
+<l>        difference(CircleSectionSmall, RegionsSplited, RegionConcatSmall)</l>
+<c>        </c>
+<c>        * 检测与高等级的连接部分</c>
+<l>        concat_obj(RegionConcatSmall, RegionConcatBig, ObjectsConcat1)</l>
+<l>        union1(ObjectsConcat1, RegionUnion1)</l>
+<l>        connection(RegionUnion1, ConnectedRegions3)</l>
+<c>        </c>
+<c>        * 如果和高等级连接成功 那么等级就会自然变成高等级</c>
+<l>        select_shape(ConnectedRegions3, RegionConcatBig, 'inner_radius', 'and', 2*(I-1), 2*I)</l>
+<c>        </c>
+<l>        dev_clear_window()</l>
+<l>        dev_display(RegionConcatBig)</l>
+<l>    endfor</l>
+<c>    </c>
+<l>    concat_obj(RegionsSplited, RegionConcatBig, RegionsSplited)</l>
+<l>endfor</l>
 <c></c>
 <l>return ()</l>
 </body>
 <docu id="split_vessel_region">
 <parameters>
-<parameter id="Image"/>
-<parameter id="Index"/>
-<parameter id="RegionBranchs"/>
-<parameter id="RegionNodes"/>
-<parameter id="path"/>
+<parameter id="RegionVesselUnion"/>
+<parameter id="RegionsSplited"/>
+</parameters>
+</docu>
+</procedure>
+<procedure name="is_sharp">
+<interface>
+<ic>
+<par name="Sharpness" base_type="ctrl" dimension="0"/>
+</ic>
+<oc>
+<par name="isSharp" base_type="ctrl" dimension="0"/>
+</oc>
+</interface>
+<body>
+<l>if(Sharpness &gt;= 0.91 and Sharpness &lt; 1.195)</l>
+<l>    isSharp := true</l>
+<l>else</l>
+<l>    isSharp := false</l>
+<l>endif</l>
+<c></c>
+<l>return ()</l>
+</body>
+<docu id="is_sharp">
+<parameters>
+<parameter id="Sharpness"/>
+<parameter id="isSharp"/>
 </parameters>
 </docu>
 </procedure>

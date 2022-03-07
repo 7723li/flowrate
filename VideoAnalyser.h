@@ -31,7 +31,7 @@ extern "C"
 class VideoAnalysier
 {
 public:
-    VideoAnalysier(const QString& videopath, QVector<QImage>& imagelist, int analysisFrameCount = 100);
+    VideoAnalysier(const QString& videopath, QVector<QImage>* imagelist = nullptr, int* duration = nullptr, double* fps = nullptr, int analysisFrameCount = 100);
 
 private:
     bool init(const QString& videopath);
@@ -50,6 +50,7 @@ private:
     AVPacket* mReadPackct;                  //  用于读取帧的数据包
 
     int mVideostreamIdx;                    // 视频流位置
+    double mFps;
     double mTimeBase;                       // 用于换算成 -> 秒 <- 数的时间基
 };
 
@@ -97,6 +98,9 @@ private slots:
 
     void slotRedraw();
 
+private:
+    void frameIndexChanged();
+
 signals:
     void signalExit(VideoFramePlayer*);
 
@@ -107,15 +111,17 @@ private:
 
     QVector<QImage> mImageList;
 
-    QImage mCurrentShowImage;               // 当前显示的图像
+    QImage mCurrentImage;                   // 当前处理的图像
+    QImage mShowImage;                      // 用来显示的图像
     int mTotalFrameCount;                   // 总帧数
-    int mCurrentFrameIdnex;                 // 当前帧下标
+    int mCurrentFrameIndex;                 // 当前帧下标
 
     RegionPoints mRegionBoundaryPoints;             // 单张图片的血管外边缘区域的坐标
-    QVector<RegionPoints> mRegionBranchPoints;      // 单张图片的血管分支区域的坐标
-    QVector<RegionPoints> mRegionNodesPoints;       // 单张图片的血管结点区域的坐标
+    QVector<RegionPoints> mRegionSplitedPoints;     // 单张图片的血管分割区域的坐标
     QVector<RegionPoints> mRegionFlowTrackPoints;   // 全部图片的流动轨迹的坐标
     QVector<double> mFlowTrackAreas;                // 全部图片的流动轨迹面积
 
-    bool mIsShowingTracks;                  // 是否正在显示某个区域
+    bool mIsShowingVesselRegion;            // 是否正在显示血管区域
+    bool mIsShowingSplitVesselRegion;       // 是否正在显示分割区域
+    bool mIsShowingFlowTrack;               // 是否正在显示流动区域
 };

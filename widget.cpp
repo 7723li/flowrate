@@ -4,7 +4,7 @@ Widget::Widget(QWidget *parent)
     : QWidget(parent),
     mUsingCamera(nullptr), mIsCameraOpen(false), mIsCameraCapturing(false),
     mLib("GenericCameraModule.dll"), mCommonFuncPtr(nullptr), mRuntimeFramerateFuncPtr(nullptr), mCameraParamWidget(new CameraParamWidget(mLib)),
-    mFrameWidth(0), mFrameHeight(0), mPixelByteCount(0), mImageSize(0), mVideoRecorder(new AsyncVideoRecorder(mVideoWriter)), mConfigFramerate(0.0), mRunningFramerate(0.0),
+    mFrameWidth(0), mFrameHeight(0), mPixelByteCount(0), mMagnification(0), mPixelSize(0.0), mImageSize(0), mVideoRecorder(new AsyncVideoRecorder(mVideoWriter)), mConfigFramerate(0.0), mRunningFramerate(0.0),
     mLastSecondRecvFrameCount(0), mLastSecondRecvFrameCountDisplay(0), mIsUpdatingCameraList(false), mShowDebugMessage(true), mSharpness(0.0),
     mContinueSharpFrameCount(0), mContinueRecordVideoCount(1), mFlowTrackCalculatingNumer(0)
 {
@@ -34,8 +34,8 @@ Widget::Widget(QWidget *parent)
 
     mRuntimeFramerateFuncPtr = mLib.resolve("getRuntimeFramerate");
 
-//    mGetRuntimeFramerateTimer.setInterval(1000);
-//    connect(&mGetRuntimeFramerateTimer, &QTimer::timeout, this, &Widget::slotRefreshFramerate);
+    mGetRuntimeFramerateTimer.setInterval(1000);
+    connect(&mGetRuntimeFramerateTimer, &QTimer::timeout, this, &Widget::slotRefreshFramerate);
 
     connect(&mAsyncFlowrateCalculator, &AsyncSharpnessCalculator::signalUpdateSharpness,this, &Widget::slotCalcSharpness, Qt::QueuedConnection);
 
@@ -51,7 +51,7 @@ Widget::Widget(QWidget *parent)
     connect(&mLoopCalcFlowTrackTimer, &QTimer::timeout, this, &Widget::slotLoopCalcFlowTrack);
     mLoopCalcFlowTrackTimer.start();
 
-    //QTimer::singleShot(1000, this, &Widget::slotInitOpenCamera);
+    QTimer::singleShot(1000, this, &Widget::slotInitOpenCamera);
 }
 
 Widget::~Widget()
@@ -139,6 +139,12 @@ void Widget::beginCapture()
 
         mCommonFuncPtr = mLib.resolve("pixelByteCount");
         ((frameSizeFunc *)mCommonFuncPtr)(mUsingCamera, mPixelByteCount);
+
+        mCommonFuncPtr = mLib.resolve("magnification");
+        ((magnificationFunc*)mCommonFuncPtr)(mUsingCamera, mMagnification);
+
+        mCommonFuncPtr = mLib.resolve("pixelSize");
+        ((pixelSizeFunc*)mCommonFuncPtr)(mUsingCamera, mPixelSize);
 
         mImageSize = mFrameWidth * mFrameHeight * mPixelByteCount;
 
@@ -547,7 +553,7 @@ void Widget::slotVideoRecordDoubleClick(const QModelIndex &index)
     }
 
     QVector<QImage> imagelist;
-    VideoAnalysier(videoPath, imagelist);
+    VideoAnalysier(videoPath, &imagelist);
     if(imagelist.empty())
     {
         return;
@@ -602,16 +608,15 @@ void Widget::slotCloseVideoFramePlayer(VideoFramePlayer *videoFramePlayer)
 
 void Widget::slotLoopCalcFlowTrack()
 {
-    QTableWidget* videorecord = mUI.videorecord;
-    int rowCount = videorecord->rowCount();
+    int rowCount = mUI.videorecord->rowCount();
 
     for(int i = 0; i < rowCount; ++i)
     {
-        QTableWidgetItem* flowrateItem = videorecord->item(i, 2);
+        QTableWidgetItem* flowrateItem = mUI.videorecord->item(i, 5);
         if(mFlowTrackCalculatingNumer < mUI.flowrateProcessNumber->currentText().toInt() && flowrateItem->text() == QStringLiteral("等待中"))
         {
             QVector<QImage> imagelist;
-            VideoAnalysier(videorecord->item(i, 0)->text(), imagelist);
+            VideoAnalysier(mUI.videorecord->item(i, 0)->text(), &imagelist);
             if(imagelist.size() < 2)
             {
                 continue;
@@ -621,7 +626,7 @@ void Widget::slotLoopCalcFlowTrack()
             flowrateItem->setText(QStringLiteral("计算中"));
 
             AsyncFlowTrackAreaCalculator* asyncFlowTrackAreaCalculator = new AsyncFlowTrackAreaCalculator(imagelist);
-            mMapFlowTrackThreadToFlowrateItem[asyncFlowTrackAreaCalculator] = flowrateItem;
+            mMapFlowTrackThreadToFlowrateItem[asyncFlowTrackAreaCalculator] = i;
             connect(asyncFlowTrackAreaCalculator, &AsyncFlowTrackAreaCalculator::signalUpdateTrackArea, this, &Widget::slotUpdateTrackArea);
 
             asyncFlowTrackAreaCalculator->start();
@@ -647,15 +652,13 @@ void Widget::slotUpdateTrackArea(AsyncFlowTrackAreaCalculator *asyncFlowTrackAre
     QVector<double> trackareas = std::move(asyncFlowTrackAreaCalculator->getFlowtrackArea());
     QVector<RegionPoints> regionPoints = std::move(asyncFlowTrackAreaCalculator->getFlowtrackRegionPoints());
 
-    QTableWidgetItem* flowrateItem = mMapFlowTrackThreadToFlowrateItem[asyncFlowTrackAreaCalculator];
+    int inRow = mMapFlowTrackThreadToFlowrateItem[asyncFlowTrackAreaCalculator];
     mMapFlowTrackThreadToFlowrateItem.remove(asyncFlowTrackAreaCalculator);
 
     delete asyncFlowTrackAreaCalculator;
     asyncFlowTrackAreaCalculator = nullptr;
 
     --mFlowTrackCalculatingNumer;
-
-    int inRow = flowrateItem->row();
 
     mMapVideoRecordRowToFlowtrackArea[inRow] = trackareas;
     mMapVideoRecordRowToFlowtrackRegionPoints[inRow] = regionPoints;
@@ -669,14 +672,13 @@ void Widget::slotUpdateTrackArea(AsyncFlowTrackAreaCalculator *asyncFlowTrackAre
         }
     }
 
-    double sumFlowtrackArea = 0.0, flowrate = 0.0;
-    for(double trackarea : trackareas)
-    {
-        sumFlowtrackArea += trackarea;
-    }
-    flowrate = sumFlowtrackArea * 5.6 * 30 / 1000 / 5 / 1000 / trackareas.size();
+    double framerate = mUI.videorecord->item(inRow, 2)->text().toDouble();
+    int tMagnification = mUI.videorecord->item(inRow, 3)->text().toInt();
+    double tPixelSize= mUI.videorecord->item(inRow, 4)->text().toDouble();
 
-    flowrateItem->setText(QString::number(flowrate));
+    double flowrate = Flowrate::calcFlowrateFromFlowTrackDistances(trackareas, framerate, tPixelSize, tMagnification);
+
+    mUI.videorecord->item(inRow, 5)->setText(QString::number(flowrate));
 }
 
 void Widget::asyncUpdateAvaliableCameras()
@@ -715,12 +717,24 @@ void Widget::insertOneVideoRecord()
     QTableWidgetItem* durationItem = new QTableWidgetItem;
     durationItem->setText(mUI.video_time_display->text());
 
+    QTableWidgetItem* framerateItem = new QTableWidgetItem;
+    framerateItem->setText(QString::number(mConfigFramerate));
+
+    QTableWidgetItem* magnificationItem = new QTableWidgetItem;
+    magnificationItem->setText(QString::number(mMagnification));
+
+    QTableWidgetItem* pixelSizeItem = new QTableWidgetItem;
+    pixelSizeItem->setText(QString::number(mPixelSize));
+
     QTableWidgetItem* flowrateItem = new QTableWidgetItem;
     flowrateItem->setText(QStringLiteral("等待中"));
 
     mUI.videorecord->setItem(currentRowCount, 0, pathItem);
     mUI.videorecord->setItem(currentRowCount, 1, durationItem);
-    mUI.videorecord->setItem(currentRowCount, 2, flowrateItem);
+    mUI.videorecord->setItem(currentRowCount, 2, framerateItem);
+    mUI.videorecord->setItem(currentRowCount, 3, magnificationItem);
+    mUI.videorecord->setItem(currentRowCount, 4, pixelSizeItem);
+    mUI.videorecord->setItem(currentRowCount, 5, flowrateItem);
 }
 
 void Widget::insertOneVideoRecord(const QFileInfo &videoFileinfo)
@@ -730,19 +744,35 @@ void Widget::insertOneVideoRecord(const QFileInfo &videoFileinfo)
 
     QString videoAbsPath = videoFileinfo.absoluteFilePath();
 
+    int duration = 0;
+    double fps = 0.0;
+    VideoAnalysier(videoAbsPath, nullptr, &duration, &fps);
+
     QTableWidgetItem* pathItem = new QTableWidgetItem;
     pathItem->setText(videoFileinfo.absoluteFilePath());
     pathItem->setToolTip(videoFileinfo.absoluteFilePath());
 
     QTableWidgetItem* durationItem = new QTableWidgetItem;
-    durationItem->setText("/");
+    durationItem->setText(QString::number(duration));
+
+    QTableWidgetItem* framerateItem = new QTableWidgetItem;
+    framerateItem->setText(QString::number(fps));
+
+    QTableWidgetItem* magnificationItem = new QTableWidgetItem;
+    magnificationItem->setText("5");
+
+    QTableWidgetItem* pixelSizeItem = new QTableWidgetItem;
+    pixelSizeItem->setText("5.6");
 
     QTableWidgetItem* flowrateItem = new QTableWidgetItem;
     flowrateItem->setText(QStringLiteral("等待中"));
 
     mUI.videorecord->setItem(currentRowCount, 0, pathItem);
     mUI.videorecord->setItem(currentRowCount, 1, durationItem);
-    mUI.videorecord->setItem(currentRowCount, 2, flowrateItem);
+    mUI.videorecord->setItem(currentRowCount, 2, framerateItem);
+    mUI.videorecord->setItem(currentRowCount, 3, magnificationItem);
+    mUI.videorecord->setItem(currentRowCount, 4, pixelSizeItem);
+    mUI.videorecord->setItem(currentRowCount, 5, flowrateItem);
 }
 
 /**********AsyncVideoRecorder**********/
@@ -954,7 +984,7 @@ QVector<RegionPoints>& AsyncFlowTrackAreaCalculator::getFlowtrackRegionPoints()
 
 void AsyncFlowTrackAreaCalculator::run()
 {
-    Flowrate::calFlowTrackAreas(mImagelist, mFlowtrackArea, mFlowtrackRegionPoints);
+    Flowrate::calFlowTrackDistances(mImagelist, mFlowtrackArea, mFlowtrackRegionPoints);
     emit signalUpdateTrackArea(this);
 }
 /**********AsyncFlowTrackAreaCalculator**********/

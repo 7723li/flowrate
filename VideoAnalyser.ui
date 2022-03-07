@@ -297,9 +297,9 @@ background-color:rgb(255, 247, 237);
       </widget>
      </item>
      <item>
-      <widget class="QLabel" name="flowTrackArea">
+      <widget class="QLabel" name="flowTrackDistance">
        <property name="text">
-        <string>流动轨迹面积：/</string>
+        <string>流动轨迹距离：/</string>
        </property>
       </widget>
      </item>

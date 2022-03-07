@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1050</width>
-    <height>715</height>
+    <width>1150</width>
+    <height>768</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -376,7 +376,7 @@
     </layout>
    </item>
    <item>
-    <layout class="QGridLayout" name="gridLayout_4" rowstretch="0,1" columnstretch="1,0">
+    <layout class="QGridLayout" name="gridLayout_4" rowstretch="0,0" columnstretch="1,0">
      <item row="0" column="0">
       <widget class="QLineEdit" name="importDir">
        <property name="sizePolicy">
@@ -412,12 +412,27 @@
        </column>
        <column>
         <property name="text">
-         <string>时长</string>
+         <string>时长(s)</string>
         </property>
        </column>
        <column>
         <property name="text">
-         <string>全局平均流速</string>
+         <string>帧率(fps)</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>放大倍率</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>像素尺寸(um/px)</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>流速(um/s)</string>
         </property>
        </column>
       </widget>

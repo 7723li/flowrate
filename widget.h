@@ -167,6 +167,8 @@ class Widget : public QWidget
     using framerateFunc = void*(GenericCameraModule*, double&);
     using frameSizeFunc = void*(GenericCameraModule*, int&);
     using captureFunc = void*(GenericCameraModule*);
+    using magnificationFunc = void*(GenericCameraModule*, int&);
+    using pixelSizeFunc = void*(GenericCameraModule*, double&);
 
 public:
     Widget(QWidget *parent = nullptr);
@@ -247,6 +249,8 @@ private:
     int mFrameWidth;                                // 宽
     int mFrameHeight;                               // 高
     int mPixelByteCount;                            // 一像素占用的字节数
+    int mMagnification;                             // 放大倍率
+    double mPixelSize;                              // 像素尺寸(um/px)
 
     int mImageSize;                                 // 图像尺寸
     QImage mRecvImage;                              // 接收到的图像
@@ -285,7 +289,7 @@ private:
 
     int mFlowTrackCalculatingNumer;                 // 正在计算流速的线程数量
     QTimer mLoopCalcFlowTrackTimer;                 // 循环检查流速计算的定时去 1000ms
-    QMap<AsyncFlowTrackAreaCalculator*, QTableWidgetItem*> mMapFlowTrackThreadToFlowrateItem;   // 计算流速的线程 对应到 流速显示控件
+    QMap<AsyncFlowTrackAreaCalculator*, int> mMapFlowTrackThreadToFlowrateItem;                 // 计算流速的线程 对应到 视频记录行号
     QMap<int, QVector<double>> mMapVideoRecordRowToFlowtrackArea;                               // 视频记录行号 对应到 流动轨迹面积
     QMap<int, QVector<RegionPoints>> mMapVideoRecordRowToFlowtrackRegionPoints;                 // 视频记录行号 对应到 流动轨迹坐标
 };
