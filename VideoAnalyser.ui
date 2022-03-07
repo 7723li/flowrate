@@ -11,7 +11,11 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Form</string>
+   <string>流速--图像解析</string>
+  </property>
+  <property name="windowIcon">
+   <iconset resource="flowrate.qrc">
+    <normaloff>:/icons/image/icon.ico</normaloff>:/icons/image/icon.ico</iconset>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout" stretch="0,1,0,0">
    <item>
@@ -320,6 +324,8 @@ background-color:rgb(255, 247, 237);
    </item>
   </layout>
  </widget>
- <resources/>
+ <resources>
+  <include location="flowrate.qrc"/>
+ </resources>
  <connections/>
 </ui>

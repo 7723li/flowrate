@@ -11,7 +11,11 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Form</string>
+   <string>相机--参数设置</string>
+  </property>
+  <property name="windowIcon">
+   <iconset resource="flowrate.qrc">
+    <normaloff>:/icons/image/icon.ico</normaloff>:/icons/image/icon.ico</iconset>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <item>
@@ -87,6 +91,8 @@
    </item>
   </layout>
  </widget>
- <resources/>
+ <resources>
+  <include location="flowrate.qrc"/>
+ </resources>
  <connections/>
 </ui>
