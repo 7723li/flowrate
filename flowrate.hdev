@@ -4,312 +4,188 @@
 <interface/>
 <body>
 <l>dev_update_off()</l>
+<l>debug:=false</l>
+<l>pathloop:=false</l>
 <c></c>
-<l>paths:=['D:/codes/PicAndTemplate/微循环测试视频/images/20210607161929cut_5698_5819/',\
-        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607161929cut_5862_5983/',\
-        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607161929cut_7183_7304/',\
-        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607161929cut_7335_7456/',\
-        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607161929cut_7393_7514/',\
-        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607162432cut_355_476/',\
-        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607162432cut_498_619/',\
-        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607162432cut_718_839/',\
-        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607163032cut_1670_1791/',\
-        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607163032cut_1733_1854/',\
-        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607163032cut_5525_5646/',\
-        'D:/codes/PicAndTemplate/微循环测试视频/images/20210607163032cut_7755_7876/',\
-        'D:/codes/PicAndTemplate/微循环测试视频/images/20211208134526cut_73_194/',\
-        'D:/codes/PicAndTemplate/微循环测试视频/images/20211210233906cut_2126_2247/',\
-        'D:/codes/PicAndTemplate/V1001559/',\
-        'D:/codes/PicAndTemplate/EV_PIC/']</l>
-<l>path:='D:/codes/PicAndTemplate/微循环测试视频/images/20210607161929cut_5698_5819/'</l>
+<l>samplepaths('D:/codes/PicAndTemplate/', paths)</l>
+<l>path:='D:/codes/PicAndTemplate/微循环测试视频/images/20210607161929cut_7183_7304/'</l>
 <l>tuple_find(paths, path, PathIndex)</l>
 <c></c>
 <c>* 这个循环是专门刷数据用的</c>
-<l>TupleAreasMean:=[]</l>
 <l>for PathIndex:=0 to |paths|-1 by 1</l>
-<l>path:=paths[PathIndex]</l>
+<l>path:=paths[PathIndex]  </l>
+<l>pathloop:=true</l>
+<l>dev_close_window()</l>
+<l>if(debug)</l>
 <l>dev_clear_window()</l>
-<l>dev_disp_text(paths[PathIndex], 'window', 'top', 'left', 'forest green', [], [])</l>
+<l>dev_set_color('red')</l>
+<l>dev_disp_text(path, 'window', 'top', 'left', 'forest green', [], [])</l>
+<l>endif</l>
 <c></c>
-<c>***************************************消抖+找到图像序列中稳定出现的区域BEGIN***************************************</c>
-<l>firstIndex := 1</l>
+<c>* @brief  血管信息提取/糖萼算法/流速算法程序结构</c>
+<c>* @author lzx/yzt</c>
+<c>* @date   2022/05/22</c>
+<c>*</c>
+<c>* read_imagelist</c>
+<c>* [input：路径 output：图像序列/图像宽度/图像高度]</c>
+<c>* </c>
+<c>* --| antishake </c>
+<c>*     [input：ImageList-图像序列 AntiShakeFrameNumber-防抖帧数 </c>
+<c>*     [output：RegionVesselConcat-血管区域 ImageGaussConcat-高斯模糊图像序列 TupleProcessImageIndex-处理过的图像序列下标 TupleTranPrevToRearRows/ TupleTranPrevToRearCols-防抖纵横位移]</c>
+<c>*     [调试输入：path/pathloop/debug]</c>
+<c>* </c>
+<c>* ----| split_vessel_region</c>
+<c>*       [input：组合血管区域 output：血管中心线/分解血管区域/直径/长度]</c>
+<c>* </c>
+<c>* ------| glycocalyx</c>
+<c>*         [input：组合血管区域 output：糖萼尺寸]</c>
+<c>* </c>
+<c>* ------| flowrate</c>
+<c>*         [input：图像序列/组合血管区域 output：红细胞流速]</c>
+<c>* </c>
 <c></c>
-<c>* 首帧预处理 对应的变量用在后续的后帧缓存</c>
-<c>* 首帧必然清晰才开始录像</c>
-<l>pre_process (ImagePrev, ImagePrevGauss, RegionUnionPrev, path, firstIndex, Width, Height)</l>
-<c></c>
-<c>* 记录合并后的血管区域</c>
-<l>gen_region_points(RegionCellTrackConcat, [], [])</l>
-<c></c>
-<c>* 记录的位移行/列/处理过的图像下标</c>
-<l>TupleDebugTransRows := [0]</l>
-<l>TupleDebugTransCols := [0]</l>
-<l>TupleProcessIndex := [firstIndex]</l>
-<c></c>
-<c>* 遍历图像序列</c>
-<l>for I:=firstIndex+1 to firstIndex+99 by 1    </l>
-<c>    * 后一帧预处理</c>
-<l>    pre_process (ImageRear, ImageRearGauss, RegionUnionRear, path, I, Width, Height)</l>
-<c>    </c>
-<c>    * 后帧血管区域判空 若为空 next one</c>
-<l>    area_center(RegionUnionRear, AreaRegionUnionRear, useless, useless)</l>
-<l>    if(|AreaRegionUnionRear| == 0 or -1 == AreaRegionUnionRear)</l>
+<l>read_imagelist (ImageList, path, Width, Height, Success)</l>
+<l>if(Success==false)</l>
+<l>    if(pathloop)</l>
 <l>        continue</l>
-<l>    endif</l>
-<c>    </c>
-<c>    * 不清晰的也不要 next one</c>
-<l>    get_image_sharpness (ImageRearGauss, RegionUnionRear, Sharpness)</l>
-<l>    is_sharp(Sharpness, isSharp)</l>
-<l>    if(isSharp==false)</l>
-<l>        continue</l>
-<l>    endif</l>
-<c>    </c>
-<c>    * 记录处理了一帧的下缀</c>
-<l>    TupleProcessIndex := [TupleProcessIndex, I]</l>
-<c>    </c>
-<c>    * 前帧到后帧的差异区域</c>
-<l>    difference(RegionUnionRear, RegionUnionPrev, RegionDifference)</l>
-<c>    </c>
-<c>    * 计算差异区域在各行的宽度</c>
-<l>    dis_Row := []</l>
-<l>    for J:=0 to Height-1 by 1</l>
-<l>        gen_region_line(Line, J, 0, J, Width-1)</l>
-<l>        intersection(Line, RegionDifference, RegionIntersection)</l>
-<l>        connection(RegionIntersection, ConnectedRegions)</l>
-<l>        area_center(ConnectedRegions, AreaRow, useless, useless)</l>
-<l>        dis_Row := [dis_Row, AreaRow]</l>
-<l>    endfor</l>
-<c>    </c>
-<c>    * 计算差异区域在各列的高度</c>
-<l>    dis_Col := []</l>
-<l>    for J:=0 to Width-1 by 1</l>
-<l>        gen_region_line(Line, 0, J, Height-1, J)</l>
-<l>        intersection(Line, RegionDifference, RegionIntersection)</l>
-<l>        connection(RegionIntersection, ConnectedRegions)</l>
-<l>        area_center(ConnectedRegions, AreaCol, useless, useless)</l>
-<l>        dis_Col := [dis_Col, AreaCol]</l>
-<l>    endfor</l>
-<c>    </c>
-<c>    * 最大距离的正负作为粗对齐范围 方差作为步进粗对齐距离</c>
-<l>    tuple_max(dis_Row, maxRowDis)</l>
-<l>    tuple_deviation(dis_Row, deviationRowDis)</l>
-<l>    tuple_max(dis_Col, maxColDis)</l>
-<l>    tuple_deviation(dis_Col, deviationColDis)</l>
-<c>    </c>
-<c>    * 粗对齐 找出一个横向纵向位移后 能使-&gt;前后帧血管区域重叠面积最大&lt;-的位移数值</c>
-<c>    * 注意：这里是为了减少后面细对齐位移的次数</c>
-<l>    maxIntersectAreaRow := 0</l>
-<l>    maxIntersectAreaCol := 0</l>
-<l>    maxIntersectArea := 0</l>
-<c>    </c>
-<l>    for Row:=-maxRowDis to maxRowDis by deviationRowDis</l>
-<l>        for Col:=-maxColDis to maxColDis by deviationColDis</l>
-<l>            hom_mat2d_identity(HomMat2D)</l>
-<l>            hom_mat2d_translate(HomMat2D, Row, Col, HomMat2D)</l>
-<l>            affine_trans_region(RegionUnionPrev, RegionUnionPrevTrans, HomMat2D, 'nearest_neighbor')</l>
-<c>            </c>
-<l>            intersection(RegionUnionRear, RegionUnionPrevTrans, RegionIntersect)</l>
-<l>            area_center(RegionIntersect, AreaRegionIntersect, RowRegionIntersect, ColumnRegionIntersect)</l>
-<l>            if(AreaRegionIntersect &gt; maxIntersectArea)</l>
-<l>                maxIntersectArea := AreaRegionIntersect</l>
-<l>                maxIntersectAreaRow := Row</l>
-<l>                maxIntersectAreaCol := Col</l>
-<l>            endif</l>
-<l>        endfor</l>
-<l>    endfor</l>
-<c>    </c>
-<c>    * 细对齐 将前帧的血管区域移动至的重叠面积最大的地方 达到防抖的效果</c>
-<c>    * J循环是为了多找一次 提高精度</c>
-<l>    maxIntersectAreaRowCopy := maxIntersectAreaRow</l>
-<l>    maxIntersectAreaColCopy := maxIntersectAreaCol</l>
-<l>    for J:=0 to 1 by 1</l>
-<l>        for X:=-2.56 to 2.56 by 0.04</l>
-<l>            hom_mat2d_identity(HomMat2DPrevToRearTemp)</l>
-<l>            hom_mat2d_translate(HomMat2DPrevToRearTemp, maxIntersectAreaRow, maxIntersectAreaColCopy+X, HomMat2DPrevToRearTemp)</l>
-<l>            affine_trans_region(RegionUnionPrev, RegionUnionPrevTrans, HomMat2DPrevToRearTemp, 'nearest_neighbor')</l>
-<c>            </c>
-<l>            intersection(RegionUnionPrevTrans, RegionUnionRear, RegionIntersect)</l>
-<l>            area_center(RegionIntersect, AreaRegionIntersect, useless, useless)</l>
-<l>            if(AreaRegionIntersect &gt; maxIntersectArea)</l>
-<l>                maxIntersectArea := AreaRegionIntersect</l>
-<l>                maxIntersectAreaCol := maxIntersectAreaColCopy+X</l>
-<l>            endif</l>
-<l>        endfor</l>
-<c>        </c>
-<l>        for Y:=-2.56 to 2.56 by 0.04</l>
-<l>            hom_mat2d_identity(HomMat2DPrevToRearTemp)</l>
-<l>            hom_mat2d_translate(HomMat2DPrevToRearTemp, maxIntersectAreaRowCopy+Y, maxIntersectAreaCol, HomMat2DPrevToRearTemp)</l>
-<l>            affine_trans_region(RegionUnionPrev, RegionUnionPrevTrans, HomMat2DPrevToRearTemp, 'nearest_neighbor')</l>
-<c>            </c>
-<l>            intersection(RegionUnionPrevTrans, RegionUnionRear, RegionIntersect)</l>
-<l>            area_center(RegionIntersect, AreaRegionIntersect, useless, useless)</l>
-<l>            if(AreaRegionIntersect &gt; maxIntersectArea)</l>
-<l>                maxIntersectArea := AreaRegionIntersect</l>
-<l>                maxIntersectAreaRow := maxIntersectAreaRowCopy+Y</l>
-<l>            endif</l>
-<l>        endfor</l>
-<l>    endfor</l>
-<c>    </c>
-<c>    * 最终找到最佳的前帧对齐到后帧的位移数值</c>
-<l>    hom_mat2d_identity(HomMat2DPrevToRear)</l>
-<l>    hom_mat2d_translate(HomMat2DPrevToRear, maxIntersectAreaRow, maxIntersectAreaCol, HomMat2DPrevToRear)</l>
-<l>    affine_trans_region(RegionUnionPrev, RegionUnionPrevTrans, HomMat2DPrevToRear, 'nearest_neighbor')</l>
-<c>    </c>
-<l>    TupleDebugTransRows := [TupleDebugTransRows, maxIntersectAreaRow]</l>
-<l>    TupleDebugTransCols := [TupleDebugTransCols, maxIntersectAreaCol]</l>
-<c>    </c>
-<c>    * 记录合并细胞轨迹</c>
-<l>    if(|TupleProcessIndex|&gt;2)</l>
-<c>        * 生成合成流动轨迹的掩膜</c>
-<l>        affine_trans_region(RegionCellTrackConcat, RegionCellTrackConcat, HomMat2DPrevToRear, 'nearest_neighbor')</l>
-<l>        smallest_rectangle1(RegionCellTrackConcat, RegionCellTrackMaskRow1, RegionCellTrackMaskColumn1, RegionCellTrackMaskRow2, RegionCellTrackMaskColumn2)</l>
-<l>        gen_rectangle1(RegionCellTrackMask, RegionCellTrackMaskRow1, RegionCellTrackMaskColumn1, RegionCellTrackMaskRow2, RegionCellTrackMaskColumn2)</l>
-<c>        </c>
-<c>        * 只要与掩膜重叠的部分</c>
-<l>        intersection(RegionUnionPrevTrans, RegionCellTrackMask, RegionUnionPrevTrans)</l>
-<l>        concat_obj(RegionCellTrackConcat, RegionUnionPrevTrans, RegionCellTrackConcat)</l>
 <l>    else</l>
-<l>        union1(RegionUnionPrevTrans, RegionCellTrackConcat)</l>
+<l>        return()</l>
 <l>    endif</l>
-<c>    </c>
-<c>    * 调试显示</c>
-<l>    union1(RegionCellTrackConcat, DebugUnionRegionCellTrackConcat)</l>
-<l>    boundary(DebugUnionRegionCellTrackConcat, DebugBorderRegionCellTrackConcat, 'inner')</l>
-<l>    dev_clear_window()</l>
-<l>    dev_display(ImageRear)</l>
-<l>    dev_display(DebugBorderRegionCellTrackConcat)</l>
-<l>    dev_disp_text(paths[PathIndex], 'window', 'top', 'left', 'forest green', [], [])</l>
-<c>    </c>
-<c>    * 前帧变后帧</c>
-<l>    if(I&lt;firstIndex+99)</l>
-<l>        ImagePrevGauss := ImageRearGauss</l>
-<l>        RegionUnionPrev := RegionUnionRear</l>
-<l>    endif</l>
-<l>endfor</l>
-<c>***************************************消抖+找到图像序列中稳定出现的区域END***************************************</c>
+<l>endif</l>
 <c></c>
-<c>***************************************血管轨迹区域分段BEGIN***************************************</c>
-<c>* 分解</c>
-<l>union1(RegionCellTrackConcat, RegionUnionCellTrack)</l>
-<l>area_center(RegionUnionCellTrack, AreaRegionUnionCellTrack, useless, useless)</l>
-<l>if(AreaRegionUnionCellTrack&gt;0)</l>
-<l>    split_vessel_region (RegionUnionCellTrack, RegionsSplited)</l>
-<l>else</l>
+<c>***************************************消抖+提取完整血管区域***************************************</c>
+<c>* 防抖需要帧数</c>
+<c>* 完整血管区域 前10帧</c>
+<c>* 糖萼计算     前10帧和后40帧</c>
+<c>* 流速计算     前25帧</c>
+<c>* </c>
+<c>* 因此防抖最多需要50帧</c>
+<l>imagelist_antishake (ImageList, RegionVesselConcat, ImageGaussConcat, 50, path, pathloop, debug, TupleProcessImageIndex, TupleTranPrevToRearRows, TupleTranPrevToRearCols)</l>
+<c></c>
+<c>* 少于10帧是清晰的 视频质量不过关 next one 甚至没有一帧是清晰的 离谱至极</c>
+<l>if(|TupleProcessImageIndex|&lt;10)</l>
+<l>    if(pathloop)</l>
+<l>        continue</l>
+<l>    else</l>
+<l>        return()</l>
+<l>    endif</l>
+<l>endif</l>
+<c></c>
+<c>***************************************血管区域分段***************************************</c>
+<c>* 将完整的血管区域移动回跟首帧重叠</c>
+<l>align_antishake_region (RegionVesselConcat, RegionAlignVesselConcat, 1, 10, TupleTranPrevToRearRows, TupleTranPrevToRearCols, 'region')</l>
+<c></c>
+<c>* 判断中心线数量</c>
+<l>union1(RegionAlignVesselConcat, UnionRegionVessel)</l>
+<l>split_vessel_region (UnionRegionVessel, CenterLines, RegionVesselSplited, CenterLineContours, Width, Height, NumberCenterLines, VesselDiameters, VesselLengths)</l>
+<l>if(NumberCenterLines==0)</l>
+<l>    disp_message(WindowHandle, 'There is no available blood vessel!', 'window', Height/2, Width/2, 'black', 'true')</l>
 <l>    return()</l>
 <l>endif</l>
-<l>dev_clear_window()</l>
-<l>dev_display(RegionsSplited)</l>
-<l>dev_disp_text(paths[PathIndex], 'window', 'top', 'left', 'forest green', [], [])</l>
-<l>wait_seconds(0.5)</l>
 <c></c>
-<c>* 选择足够细长 面积足够大又不大得过分的一个区域作为观察区域</c>
-<l>region_features(RegionsSplited, 'inner_radius', RegionsSplitedInnerRadius)</l>
-<l>tuple_max(RegionsSplitedInnerRadius, RegionsSplitedInnerRadiusMax)</l>
-<l>MinInnerRadius:=4</l>
-<l>MaxInnerRadius:=10</l>
-<l>while(MinInnerRadius&lt;RegionsSplitedInnerRadiusMax)</l>
-<l>    select_shape(RegionsSplited, RegionsSplitedFilter, 'inner_radius', 'and', MinInnerRadius, MaxInnerRadius)</l>
-<l>    select_shape(RegionsSplitedFilter, RegionsSplitedFilter, 'area', 'and', 1000, 5000)</l>
-<l>    area_center(RegionsSplitedFilter, AreaRegionsSplitedFilter, useless, useless)</l>
-<l>    if(|AreaRegionsSplitedFilter|&gt;0)</l>
-<c>        * 根据权重 = 周长 * 面积开方选择一个原始观察区域</c>
-<l>        contlength(RegionsSplitedFilter, ContLength)</l>
-<l>        Grade:=ContLength*sqrt(AreaRegionsSplitedFilter)</l>
-<l>        tuple_sort_index(Grade, SortedGradeIndex)</l>
-<l>        select_obj(RegionsSplitedFilter, RawRegionObserve, SortedGradeIndex[|SortedGradeIndex|-1]+1)</l>
-<c>        </c>
-<c>        * 分解时做了一次闭运算 面积会略有损失 这里膨胀一下 取回与原区域重叠的部分作为正确的观察区域</c>
-<l>        dilation_circle(RawRegionObserve, DilationRawRegionObserve, 1.5)</l>
-<l>        intersection(RegionUnionCellTrack, DilationRawRegionObserve, RegionObserve)</l>
-<l>        break</l>
-<l>    else</l>
-<l>        MinInnerRadius:=MinInnerRadius+6</l>
-<l>        MaxInnerRadius:=MaxInnerRadius+6</l>
-<l>    endif</l>
-<l>endwhile</l>
+<c>***************************************糖萼***************************************</c>
+<l>calculate_glycocalyx (CenterLines, RegionVesselConcat, NumberCenterLines, TupleTranPrevToRearRows, TupleTranPrevToRearCols, 5.6, 5, glycocalyx)</l>
 <c></c>
-<l>dev_display(RegionObserve)</l>
-<l>wait_seconds(0.5)</l>
-<c>***************************************血管轨迹区域分段END***************************************</c>
+<c>***************************************流速***************************************</c>
+<l>calculate_flowrate (ImageGaussConcat, RegionVesselSplited, NumberCenterLines, TupleProcessImageIndex, TupleTranPrevToRearRows, TupleTranPrevToRearCols, 5.6, 5, 30, Flowrate)</l>
 <c></c>
-<c>***************************************计算流动轨迹距离BEGIN***************************************</c>
-<c>* @brief</c>
-<c>* 令 红细胞流速(um/s) = 流动轨迹距离(px) * 像素尺寸(um/px) / 放大倍率 / 前后帧时间差(s)</c>
-<c>* </c>
-<c>* 以大恒相机为例 像素尺寸取5.6mm/px 放大倍率取5 帧率取30fps</c>
-<c>* 若算出帧1与帧2之间轨迹距离为50px 则两帧之间的流速为 50 * 5.6 / 5 / (1/30) = 50 * 5.6 / 5 * 30 = 1680um/s</c>
-<c></c>
-<l>TrackDistances := []</l>
-<c>* 倒序遍历图像序列</c>
-<l>for I:=|TupleProcessIndex|-1 to 2 by -1</l>
-<c>    * 取出一帧轨迹区域</c>
-<c>    * 计算观测区域内的运动轨迹</c>
-<l>    select_obj(RegionCellTrackConcat, RegionCellTrackSelected, I)</l>
-<l>    intersection(RegionCellTrackSelected, RegionObserve, RegionCellTrackObserveRear)</l>
-<c>    </c>
-<c>    * 前帧同上</c>
-<l>    select_obj(RegionCellTrackConcat, RegionCellTrackSelected, I-1)</l>
-<l>    intersection(RegionCellTrackSelected, RegionObserve, RegionCellTrackObservePrev)</l>
-<c>   </c>
-<c>    * 计算前帧到后帧的流动形变</c>
-<l>    difference(RegionCellTrackObserveRear, RegionCellTrackObservePrev, UnionRegionCellTrackMotion)</l>
-<l>    connection(UnionRegionCellTrackMotion, ConnectedRegionCellTrackMotion)</l>
-<c>    </c>
-<c>    * 计算各个形变到前帧区域的距离</c>
-<l>    TupleTrackDistance:=[]</l>
-<l>    count_obj(ConnectedRegionCellTrackMotion, NumberConnectedRegionCellTrackMotion)</l>
-<l>    for J:=1 to NumberConnectedRegionCellTrackMotion by 1</l>
-<l>        select_obj(ConnectedRegionCellTrackMotion, RegionCellTrackMotion, J)</l>
-<c>        * 如果形变半径大于0.5 说明是已经形成孤岛的大形变(1.) 否则只是贴着前帧区域的小形变(2.)</c>
-<c>        * 1.形变外围半径的0.6倍 2.形变区域到前帧区域的最小距离</c>
-<c>        * 注意：1中不取直径是为了抵消遇到扁平孤岛时的严重畸变 取半径的0.7倍是为了弥补狭长孤岛的损失</c>
-<l>        region_features(RegionCellTrackMotion, 'inner_radius', InnerRadiusRegionCellTrackMotion)</l>
-<l>        if(|InnerRadiusRegionCellTrackMotion|&lt;=0  or InnerRadiusRegionCellTrackMotion &lt;=0)</l>
-<l>            continue</l>
-<l>        elseif(InnerRadiusRegionCellTrackMotion&gt;0.5)</l>
-<l>            region_features(RegionCellTrackMotion, 'outer_radius', DistanceRegionCellTrackMotion)</l>
-<l>            DistanceRegionCellTrackMotion:=DistanceRegionCellTrackMotion*0.6</l>
-<l>        else</l>
-<l>            distance_rr_min(RegionCellTrackMotion, RegionCellTrackObservePrev, DistanceRegionCellTrackMotion, useless, useless, useless, useless)</l>
-<l>        endif</l>
-<l>        TupleTrackDistance:=[TupleTrackDistance, DistanceRegionCellTrackMotion]</l>
-<l>    endfor</l>
-<c>    </c>
-<l>    tuple_sum(TupleTrackDistance, TrackDistance)</l>
-<l>    TrackDistances:=[TrackDistances, TrackDistance]</l>
-<c>    </c>
-<l>    if(I&gt;2)</l>
-<l>        RegionCellTrackObserveRear := RegionCellTrackObservePrev</l>
-<l>    endif</l>
-<c>    </c>
-<c>    * 根据上面前一帧位移到后一帧的数值 后一帧的轨迹和观察区域反向位移到与前一帧 自然地这里的前帧就变成下次循环里的后帧</c>
-<l>    hom_mat2d_identity(HomMat2DObserveRearToPrev)</l>
-<l>    hom_mat2d_translate(HomMat2DObserveRearToPrev, -TupleDebugTransRows[I], -TupleDebugTransCols[I], HomMat2DObserveRearToPrev)</l>
-<l>    affine_trans_region(RegionObserve, RegionObserve, HomMat2DObserveRearToPrev, 'nearest_neighbor')</l>
-<l>    affine_trans_region(RegionCellTrackConcat, RegionCellTrackConcat, HomMat2DObserveRearToPrev, 'nearest_neighbor')</l>
-<c>    </c>
-<c>    * 在前一帧的图像上调试显示观察的区域流动</c>
-<l>    pre_process(ImageOri, ImageGauss, RegionUnion, path, TupleProcessIndex[I-1], Width, Height)</l>
-<l>    boundary(RegionObserve, RegionObserveBorder, 'inner')</l>
-<l>    dev_clear_window()</l>
-<l>    dev_display(ImageOri)</l>
-<l>    dev_display(RegionCellTrackSelected)</l>
-<l>    dev_display(RegionObserveBorder)</l>
-<l>    dev_disp_text(paths[PathIndex], 'window', 'top', 'left', 'forest green', [], [])</l>
-<l>    wait_seconds(0.1)</l>
+<c>***************************************调试显示***************************************</c>
+<l>gen_empty_obj(EmptyObject)</l>
+<l>for I:=1 to NumberCenterLines by 1</l>
+<l>    select_obj(CenterLines, ObjectSelected, I)</l>
+<l>    get_contour_xld(ObjectSelected, Row, Col)</l>
+<l>    gen_region_polygon(Region, Row, Col)</l>
+<l>    concat_obj(EmptyObject, Region, EmptyObject)</l>
 <l>endfor</l>
-<c>***************************************计算流动轨迹距离END***************************************</c>
 <c></c>
-<c>***************************************调试显示流速计算BEGIN***************************************</c>
-<c>* 参考上面的轨迹距离计算公式 取图像序列的轨迹距离的平均值</c>
-<l>tuple_mean(TrackDistances, TrackDistancesMean)</l>
-<l>flowrate := TrackDistancesMean*5.6*30/5</l>
-<l>dev_disp_text('flowrate: '+flowrate+'um/s', 'window', 'bottom', 'left', 'forest green', [], [])</l>
+<l>if(debug or pathloop)</l>
+<l>    select_obj(ImageList, ImageDebug, TupleProcessImageIndex[0])</l>
+<c>    </c>
+<l>    ColorList:=['red', 'green', 'blue', 'cyan', 'yellow']</l>
 <c></c>
-<c>***************************************调试显示流速计算END***************************************</c>
+<l>    if(|Flowrate|&gt;0)</l>
+<l>        dev_close_window()</l>
+<l>        dev_open_window(10, 10, Width, Height, 'black', WindowHandle)</l>
+<l>        dev_display(ImageDebug)</l>
+<c>        </c>
+<l>        for I:=1 to NumberCenterLines by 1</l>
+<l>            select_obj(CenterLines, CenterLine, I)</l>
+<l>            select_obj(CenterLineContours, CenterLineContourLeft, 2*I-1)</l>
+<l>            select_obj(CenterLineContours, CenterLineContourRight, 2*I)</l>
+<c>            </c>
+<l>            Color:=ColorList[(I-1)%5]</l>
+<l>            dev_set_color(Color)</l>
+<c>            </c>
+<l>            dev_display(CenterLineContourLeft)</l>
+<l>            dev_display(CenterLineContourRight)</l>
+<c>            </c>
+<l>            get_contour_xld(CenterLine, RowCenterLine, ColCenterLine)</l>
+<l>            CenterLineCenterRow:=RowCenterLine[|RowCenterLine|/2]</l>
+<l>            CenterLineCenterCol:=ColCenterLine[|ColCenterLine|/2]</l>
+<c>            </c>
+<l>            set_tposition (WindowHandle, CenterLineCenterRow, CenterLineCenterCol)</l>
+<l>            write_string (WindowHandle, Flowrate[I-1]$'.2f')</l>
+<l>        endfor</l>
+<c>        </c>
+<l>        dump_window_image (ImageWindowHandleFlowrate, WindowHandle)</l>
+<l>        tuple_split(path, '/', PathSubstrings)</l>
+<l>        try</l>
+<l>            write_image(ImageWindowHandleFlowrate, 'bmp', 0, './data/flowrate/'+PathSubstrings[|PathSubstrings|-2]+'_'+PathSubstrings[|PathSubstrings|-1]+'flowrate.bmp')</l>
+<l>        catch (Exception)</l>
+<l>        endtry</l>
+<l>    endif</l>
+<c>    </c>
+<l>    if(|glycocalyx|&gt;0)</l>
+<l>        dev_open_window(10, Width+10+10, Width, Height, 'black', WindowHandle)</l>
+<l>        dev_display(ImageDebug)</l>
+<c>        </c>
+<l>        for I:=1 to NumberCenterLines by 1</l>
+<l>            if(glycocalyx[I-1]==-1)</l>
+<l>                continue</l>
+<l>            endif</l>
+<c>            </c>
+<l>            select_obj(CenterLines, CenterLine, I)</l>
+<l>            select_obj(CenterLineContours, CenterLineContourLeft, 2*I-1)</l>
+<l>            select_obj(CenterLineContours, CenterLineContourRight, 2*I)</l>
+<c>            </c>
+<l>            Color:=ColorList[(I-1)%5]</l>
+<l>            dev_set_color(Color)</l>
+<c>            </c>
+<l>            dev_display(CenterLineContourLeft)</l>
+<l>            dev_display(CenterLineContourRight)</l>
+<c>            </c>
+<l>            get_contour_xld(CenterLine, RowCenterLine, ColCenterLine)</l>
+<l>            CenterLineCenterRow:=RowCenterLine[|RowCenterLine|/2]</l>
+<l>            CenterLineCenterCol:=ColCenterLine[|ColCenterLine|/2]</l>
+<c>            </c>
+<l>            set_tposition (WindowHandle, CenterLineCenterRow, CenterLineCenterCol+3)</l>
+<l>            write_string (WindowHandle, glycocalyx[I-1]$'.2f')</l>
+<l>        endfor</l>
+<c>        </c>
+<l>        tuple_find(glycocalyx, 0, glycocalyxIndics)</l>
+<l>        if(|glycocalyxIndics|)</l>
+<l>            tuple_remove(glycocalyx, glycocalyxIndics, glycocalyxDebug)</l>
+<l>        endif</l>
+<l>        tuple_find(glycocalyxDebug, -1, glycocalyxIndics)</l>
+<l>        if(|glycocalyxIndics|)</l>
+<l>            tuple_remove(glycocalyxDebug, glycocalyxIndics, glycocalyxDebug)</l>
+<l>        endif    </l>
+<l>        if(|glycocalyxDebug|)</l>
+<l>            tuple_mean(glycocalyxDebug,glycocalyxMean)</l>
+<l>            disp_message(WindowHandle, '平均糖萼:' + glycocalyxMean$'.2f', 'window', 0, 0, 'black', 'true')</l>
+<l>        endif</l>
+<c>        </c>
+<l>        dump_window_image (ImageWindowHandleGlycocalyx, WindowHandle)</l>
+<l>        tuple_split(path, '/', PathSubstrings)</l>
+<l>        try</l>
+<l>            write_image(ImageWindowHandleGlycocalyx, 'bmp', 0, './data/flowrate/'+PathSubstrings[|PathSubstrings|-2]+'_'+PathSubstrings[|PathSubstrings|-1]+'glycocalyx.bmp')</l>
+<l>        catch (Exception)</l>
+<l>        endtry</l>
+<l>    endif</l>
+<c>    </c>
+<l>    wait_seconds(5)</l>
+<l>endif</l>
 <c></c>
-<l>TupleAreasMean:=[TupleAreasMean, TrackDistancesMean]</l>
-<l>wait_seconds(2)</l>
 <l>endfor</l>
 </body>
 <docu id="main">
@@ -318,24 +194,16 @@
 </procedure>
 <procedure name="pre_process">
 <interface>
-<oo>
+<io>
 <par name="ImageOri" base_type="iconic" dimension="0"/>
+</io>
+<oo>
 <par name="ImageGauss" base_type="iconic" dimension="0"/>
 <par name="RegionUnion" base_type="iconic" dimension="0"/>
 </oo>
-<ic>
-<par name="path" base_type="ctrl" dimension="0"/>
-<par name="Index" base_type="ctrl" dimension="0"/>
-</ic>
-<oc>
-<par name="Width" base_type="ctrl" dimension="0"/>
-<par name="Height" base_type="ctrl" dimension="0"/>
-</oc>
 </interface>
 <body>
 <c>* 注意 ImageOri是在hdev端调试输出图像用的 在CPP端不需要输出</c>
-<l>read_image (ImageOri, path + Index)</l>
-<c></c>
 <l>get_image_size (ImageOri, Width, Height)</l>
 <c></c>
 <l>count_channels (ImageOri, Channels)</l>
@@ -343,14 +211,22 @@
 <l>    rgb1_to_gray (ImageOri, ImageOri)</l>
 <l>endif</l>
 <c></c>
-<l>gauss_filter (ImageOri, ImageGauss, 7)</l>
+<l>try</l>
+<l>    gauss_filter (ImageOri, ImageGauss, 7)</l>
+<l>catch (Exception)</l>
+<l>    ImageGauss:=ImageOri</l>
+<l>    gen_region_points(RegionUnion, [], [])</l>
+<l>    return()</l>
+<l>endtry</l>
 <c></c>
 <c>* 寻找血管区域 均值滤波+动态阈值</c>
 <l>mean_image(ImageGauss, ImageMean, 43, 43)</l>
-<l>dyn_threshold(ImageGauss, ImageMean, RegionDynThresh, 5, 'dark')</l>
+<l>dyn_threshold(ImageGauss, ImageMean, RegionDynThresh, 9, 'dark')</l>
 <c></c>
 <c>* 闭运算补小洞</c>
 <l>closing_circle(RegionDynThresh, RegionClosing, 3)</l>
+<c></c>
+<l>* erosion_circle(RegionClosing, RegionErosion, 1.5)</l>
 <c></c>
 <c>* 分散出若干个连接起来的区域 大部分大概率是血管区域</c>
 <l>connection(RegionClosing, RawRegionConnected)</l>
@@ -371,206 +247,2077 @@
 </body>
 <docu id="pre_process">
 <parameters>
-<parameter id="Height"/>
 <parameter id="ImageGauss"/>
 <parameter id="ImageOri"/>
-<parameter id="Index"/>
 <parameter id="RegionUnion"/>
-<parameter id="Width"/>
-<parameter id="path"/>
 </parameters>
 </docu>
 </procedure>
 <procedure name="get_image_sharpness">
 <interface>
 <io>
-<par name="ImageGauss" base_type="iconic" dimension="0"/>
-<par name="RegionUnion" base_type="iconic" dimension="0"/>
+<par name="ImageOri" base_type="iconic" dimension="0"/>
 </io>
 <oc>
 <par name="Sharpness" base_type="ctrl" dimension="0"/>
+<par name="IsSharp" base_type="ctrl" dimension="0"/>
 </oc>
 </interface>
 <body>
-<c>* C++端令有一公开接口版本输入的图像 需要调用预处理函数pre_process</c>
-<l>* pre_process (Image, ImageGauss, RegionUnion, Path, Index, Width, Height)</l>
+<l>Sharpness:=0</l>
 <c></c>
-<c>* 血管区域的外轮廓</c>
-<l>boundary(RegionUnion, BorderRegionUnion, 'inner')</l>
+<c>* 计算图像整体的灰度方差</c>
+<l>get_image_size(ImageOri, Width, Height)</l>
+<l>gen_rectangle1(Rectangle, 0, 0, Height-1, Width-1)</l>
+<l>intensity(Rectangle, ImageOri, Mean, Deviation)</l>
 <c></c>
-<c>* 通用方法获取图像边缘区域</c>
-<l>equ_histo_image(ImageGauss, ImageGaussEquHisto)</l>
-<l>edges_image(ImageGaussEquHisto, ImaAmp, ImaDir, 'canny', 1, 'nms', -1, -1)</l>
-<l>mean_image(ImaAmp, ImageMean, 23, 23)</l>
-<l>dyn_threshold(ImaAmp, ImageMean, BorderEdges, 5, 'light')</l>
-<c></c>
-<c>* 计算 血管区域外轮廓的周长 以及 边缘区域长度</c>
-<l>area_center(BorderRegionUnion, AreaBorderRegionUnion, useless, useless)</l>
-<l>area_center(BorderEdges, AreaBorderEdges, useless, useless)</l>
-<c></c>
-<c>* 理论上来说 在理想情况下 当一幅图像足够清晰时 其轮廓周长(A)与边缘长度(B)应该相等 即A / B = 1 比如一个线宽为1的黑框白色正方形</c>
-<c>* 经过几个数据集实验 此处清晰度取值范围为[0.91, 1.195) </c>
-<l>if(|AreaBorderRegionUnion|==1 and |AreaBorderEdges|==1 and AreaBorderRegionUnion&gt;0)</l>
-<l>    Sharpness := real(AreaBorderEdges) / real(AreaBorderRegionUnion)</l>
-<l>else</l>
-<l>    Sharpness := 0</l>
+<l>if(Deviation&gt;0)</l>
+<c>    * 根据灰度方差进行对比度强化 如果灰度方差大 说明原来的对比度较高 则强化的程度可以降低 反之亦然</c>
+<c>    * 强化完成后做一次小型模糊 弱化噪点</c>
+<l>    emphasize(ImageOri, ImageEmphasize, 255.0/Deviation, 255.0/Deviation, 1)</l>
+<l>    gauss_filter(ImageEmphasize, ImageGauss, 3)</l>
+<c>    </c>
+<c>    * canny计算并提取图像上的边缘</c>
+<l>    edges_image(ImageGauss, ImaAmp, ImaDir, 'canny', 1, 'nms', 5, 8)</l>
+<l>    mean_image(ImaAmp, ImageMean, 43 ,43)</l>
+<l>    dyn_threshold(ImaAmp, ImageMean, RegionDynThresh, 5, 'light')</l>
+<c>    </c>
+<c>    * 提取出的边缘必须起码符合有10条以上大于等于100px 否则直接判断为模糊</c>
+<l>    connection(RegionDynThresh, ConnectedRegions)</l>
+<l>    area_center(ConnectedRegions, Area2, useless, useless)</l>
+<l>    tuple_max(Area2, Max)</l>
+<l>    if(Max&gt;=100)</l>
+<l>        select_shape(ConnectedRegions, SelectedRegions, 'area', 'and', 100, Max)</l>
+<c>        </c>
+<l>        count_obj(SelectedRegions, Number)</l>
+<l>        if(Number&gt;=10)</l>
+<l>            union1(SelectedRegions, RegionUnion)</l>
+<c>        </c>
+<c>            * 用边缘和边缘骨架的像素之商作为清晰度评分</c>
+<c>            * 约清晰 评分约接近1 但永远不低于1</c>
+<c>            </c>
+<l>            skeleton(RegionUnion, Skeleton)</l>
+<l>            area_center(RegionUnion, Area, useless, useless)</l>
+<l>            area_center(Skeleton, Area1, useless, useless)</l>
+<c>            </c>
+<l>            if(Area&gt;0 and Area1&gt;0)</l>
+<l>                Sharpness:=real(Area)/real(Area1)</l>
+<l>            else</l>
+<l>                Sharpness:=0</l>
+<l>            endif</l>
+<l>        endif</l>
+<l>    endif</l>
+<c>    </c>
+<l>    if(Sharpness &gt;= 1.0)</l>
+<l>        IsSharp := true</l>
+<l>    else</l>
+<l>        IsSharp := false</l>
+<l>    endif</l>
 <l>endif</l>
 <c></c>
 <l>return ()</l>
 </body>
 <docu id="get_image_sharpness">
 <parameters>
-<parameter id="ImageGauss"/>
-<parameter id="RegionUnion"/>
+<parameter id="ImageOri"/>
+<parameter id="IsSharp"/>
 <parameter id="Sharpness"/>
+</parameters>
+</docu>
+</procedure>
+<procedure name="samplepaths">
+<interface>
+<ic>
+<par name="dir" base_type="ctrl" dimension="0"/>
+</ic>
+<oc>
+<par name="paths" base_type="ctrl" dimension="0"/>
+</oc>
+</interface>
+<body>
+<l>paths:=[                                                                          \
+        dir+'微循环测试视频/images/20210607161929cut_5698_5819/'  ,\
+        dir+'微循环测试视频/images/20210607161929cut_5862_5983/'  ,\
+        dir+'微循环测试视频/images/20210607161929cut_7183_7304/'  ,\
+        dir+'微循环测试视频/images/20210607161929cut_7335_7456/'  ,\
+        dir+'微循环测试视频/images/20210607161929cut_7393_7514/'  ,\
+        dir+'微循环测试视频/images/20210607162432cut_355_476/'    ,\
+        dir+'微循环测试视频/images/20210607162432cut_498_619/'    ,\
+        dir+'微循环测试视频/images/20210607162432cut_718_839/'    ,\
+        dir+'微循环测试视频/images/20210607163032cut_1670_1791/'  ,\
+        dir+'微循环测试视频/images/20210607163032cut_1733_1854/'  ,\
+        dir+'微循环测试视频/images/20210607163032cut_5525_5646/'  ,\
+        dir+'微循环测试视频/images/20210607163032cut_7755_7876/'  ,\
+        dir+'微循环测试视频/images/20211208134526cut_73_194/'     ,\
+        dir+'微循环测试视频/images/20211210233906cut_2126_2247/'  ,\
+        dir+'V1001559/',\
+        dir+'EV_PIC/',\
+        dir+'boe4112347m001/',\
+        dir+'health/20220516103638cut_611_784/',\
+        dir+'health/20220516112444cut_104_270/',\
+        dir+'health/20220516122102cut_380_522/',\
+        dir+'health/20220516122102cut_548_703/',\
+        dir+'health/20220516123244cut_544_748/',\
+        dir+'health/20220516144241cut_324_455/',\
+        dir+'health/20220516144313cut_61_251/',\
+        dir+'health/20220516144341cut_320_518/',\
+        dir+'health/20220516144613cut_230_384/',\
+        dir+'health/20220516144613cut_594_738/',\
+        dir+'health/20220516144613cut_950_1115/',\
+        dir+'health/20220516151359cut_264_395/',\
+        dir+'health/20220516160416cut_2032_2241/',\
+        dir+'health/20220516160416cut_2620_2841/',\
+        dir+'health/20220516160416cut_2943_3107/',\
+        dir+'health/20220516160416cut_883_1160/',\
+        dir+'health/20220516163845cut_175_319/',\
+        dir+'health/20220516164947cut_720_877/',\
+        dir+'health/20220516170549cut_107_252/',\
+        dir+'health/20220516171037cut_258_407/',\
+        dir+'health/20220516171416cut_0_169/',\
+        dir+'health/20220516171528cut_225_396/',\
+        dir+'health/20220516171542cut_537_762/',\
+        dir+'health/20220516171721cut_92_380/',\
+        dir+'health/20220516173016cut_331_490/',\
+        dir+'health/20220516173048cut_246_396/',\
+        dir+'health/20220516173247cut_278_427/',\
+        dir+'health/20220516173312cut_159_305/',\
+        dir+'health/20220516173338cut_523_683/',\
+        dir+'health/20220516173409cut_349_504/',\
+        dir+'OLD_V100_DATA/20180504185614cut_0_79/',\
+        dir+'OLD_V100_DATA/20180504185614cut_17_138/',\
+        dir+'OLD_V100_DATA/20180504185614cut_88_209/',\
+        dir+'OLD_V100_DATA/20180616024458cut_38_159/',\
+        dir+'OLD_V100_DATA/20180616024458cut_632_753/',\
+        dir+'OLD_V100_DATA/20181227101336cut_16502_16623/',\
+        dir+'OLD_V100_DATA/20181227101336cut_5216_5337/',\
+        dir+'OLD_V100_DATA/20181227101336cut_8387_8508/',\
+        dir+'OLD_V100_DATA/20190102105047cut_1361_1482/',\
+        dir+'OLD_V100_DATA/20190102105047cut_1450_1571/',\
+        dir+'OLD_V100_DATA/20190102105906cut_1410_1531/',\
+        dir+'OLD_V100_DATA/20190102111356cut_1502_1623/',\
+        dir+'OLD_V100_DATA/20190102111701cut_2857_2978/',\
+        dir+'OLD_V100_DATA/20190102111701cut_3528_3649/',\
+        dir+'OLD_V100_DATA/20190102113321cut_2518_2639/',\
+        dir+'OLD_V100_DATA/20190102113321cut_3021_3142/',\
+        dir+'OLD_V100_DATA/20190102113321cut_67_188/',\
+        dir+'OLD_V100_DATA/20190102152318cut_248_369/',\
+        dir+'OLD_V100_DATA/20190102152503cut_3190_3311/',\
+        dir+'OLD_V100_DATA/20190102152922cut_764_885/',\
+        dir+'OLD_V100_DATA/20190102155334cut_1514_1635/',\
+        dir+'OLD_V100_DATA/20190102155334cut_5139_5260/',\
+        dir+'OLD_V100_DATA/20190102155334cut_6312_6433/',\
+        dir+'OLD_V100_DATA/20190102155334cut_7117_7238/',\
+        dir+'OLD_V100_DATA/20190102161052cut_8736_8857/',\
+        dir+'OLD_V100_DATA/20190102161052cut_9679_9800/',\
+        dir+'OLD_V100_DATA/20190102162530cut_5410_5531/',\
+        dir+'OLD_V100_DATA/20190102162530cut_7190_7311/',\
+        dir+'OLD_V100_DATA/20190102162530cut_9193_9314/',\
+        dir+'OLD_V100_DATA/20190102180031cut_5401_5522/',\
+        dir+'OLD_V100_DATA/20190102180031cut_5648_5769/',\
+        dir+'OLD_V100_DATA/20190102180031cut_5986_6107/',\
+        dir+'OLD_V100_DATA/20190103102155cut_2824_2945/',\
+        dir+'OLD_V100_DATA/20190103102155cut_3336_3457/',\
+        dir+'OLD_V100_DATA/20190103102155cut_3552_3673/',\
+        dir+'OLD_V100_DATA/20190103102155cut_4080_4201/',\
+        dir+'OLD_V100_DATA/20190103112914cut_2612_2733/',\
+        dir+'OLD_V100_DATA/20190103112914cut_3507_3628/',\
+        dir+'OLD_V100_DATA/20190103145821cut_6154_6275/',\
+        dir+'OLD_V100_DATA/20190103145821cut_6494_6615/',\
+        dir+'OLD_V100_DATA/20190103145821cut_7584_7705/',\
+        dir+'OLD_V100_DATA/20190103145821cut_7835_7956/',\
+        dir+'OLD_V100_DATA/20190103145821cut_7999_8120/',\
+        dir+'OLD_V100_DATA/20190103152342cut_1414_1535/',\
+        dir+'OLD_V100_DATA/20190103152342cut_1419_1540/',\
+        dir+'OLD_V100_DATA/20190103152453cut_2073_2194/',\
+        dir+'OLD_V100_DATA/20190103153152cut_2698_2819/',\
+        dir+'OLD_V100_DATA/20190103153152cut_2855_2976/',\
+        dir+'OLD_V100_DATA/20190103153152cut_3387_3508/',\
+        dir+'OLD_V100_DATA/20190103160600cut_5986_6107/',\
+        dir+'OLD_V100_DATA/20190103160600cut_8309_8430/',\
+        dir+'OLD_V100_DATA/20190104100719cut_1137_1258/',\
+        dir+'OLD_V100_DATA/20190104100719cut_2159_2280/',\
+        dir+'OLD_V100_DATA/20190104100719cut_3231_3352/',\
+        dir+'OLD_V100_DATA/20190104100719cut_3421_3542/',\
+        dir+'OLD_V100_DATA/20190104100719cut_3937_4058/',\
+        dir+'OLD_V100_DATA/20190104100719cut_411_532/',\
+        dir+'OLD_V100_DATA/20190104102938cut_1443_1564/',\
+        dir+'OLD_V100_DATA/20190104102938cut_3297_3418/',\
+        dir+'OLD_V100_DATA/20190104102938cut_3407_3528/',\
+        dir+'OLD_V100_DATA/20190104102938cut_4510_4631/',\
+        dir+'OLD_V100_DATA/20190104102938cut_4809_4930/',\
+        dir+'OLD_V100_DATA/20190104104501cut_3036_3157/',\
+        dir+'OLD_V100_DATA/20190104104501cut_3600_3721/',\
+        dir+'OLD_V100_DATA/20190104104501cut_3843_3964/',\
+        dir+'OLD_V100_DATA/20190104104501cut_4203_4324/',\
+        dir+'OLD_V100_DATA/20190104105804cut_1220_1341/',\
+        dir+'OLD_V100_DATA/20190104105804cut_2241_2362/',\
+        dir+'OLD_V100_DATA/20190104105804cut_2528_2649/',\
+        dir+'OLD_V100_DATA/20190104105804cut_3144_3265/',\
+        dir+'OLD_V100_DATA/20190104110739cut_2008_2129/',\
+        dir+'OLD_V100_DATA/20190104110739cut_496_617/',\
+        dir+'OLD_V100_DATA/20190104111905cut_3867_3988/',\
+        dir+'OLD_V100_DATA/20190104111905cut_3974_4095/',\
+        dir+'OLD_V100_DATA/20190104111905cut_710_831/',\
+        dir+'OLD_V100_DATA/20190104165039cut_6092_6213/',\
+        dir+'OLD_V100_DATA/20190104165039cut_662_783/',\
+        dir+'OLD_V100_DATA/20190104165039cut_709_830/',\
+        dir+'OLD_V100_DATA/20190104165039cut_88_209/',\
+        dir+'OLD_V100_DATA/20190104165846cut_1279_1400/',\
+        dir+'OLD_V100_DATA/20190104165846cut_740_861/',\
+        dir+'OLD_V100_DATA/20190104170013cut_1337_1458/',\
+        dir+'OLD_V100_DATA/20190104170013cut_1446_1567/',\
+        dir+'OLD_V100_DATA/20190104170013cut_1744_1865/',\
+        dir+'OLD_V100_DATA/20190104170013cut_2027_2148/',\
+        dir+'OLD_V100_DATA/20190104170013cut_2364_2485/',\
+        dir+'OLD_V100_DATA/20190107100523cut_2747_2868/',\
+        dir+'OLD_V100_DATA/20190107100523cut_4097_4218/',\
+        dir+'OLD_V100_DATA/20190107100523cut_4651_4772/',\
+        dir+'OLD_V100_DATA/20190107101327cut_1185_1306/',\
+        dir+'OLD_V100_DATA/20190107101623cut_1637_1758/',\
+        dir+'OLD_V100_DATA/20190107101623cut_2945_3066/',\
+        dir+'OLD_V100_DATA/20190107101623cut_630_751/',\
+        dir+'OLD_V100_DATA/20190107102538cut_3190_3311/',\
+        dir+'OLD_V100_DATA/20190107103305cut_1747_1868/',\
+        dir+'OLD_V100_DATA/20190107103305cut_2505_2626/',\
+        dir+'OLD_V100_DATA/20190107103305cut_3974_4095/',\
+        dir+'OLD_V100_DATA/20190107103305cut_4481_4602/',\
+        dir+'OLD_V100_DATA/20190107104056cut_1744_1865/',\
+        dir+'OLD_V100_DATA/20190107113432cut_353_474/',\
+        dir+'OLD_V100_DATA/20190107113432cut_44_165/',\
+        dir+'OLD_V100_DATA/20190107113432cut_642_763/',\
+        dir+'OLD_V100_DATA/20190107114205cut_1095_1216/',\
+        dir+'OLD_V100_DATA/20190107114205cut_3471_3592/',\
+        dir+'OLD_V100_DATA/20190107114205cut_4055_4176/',\
+        dir+'OLD_V100_DATA/20190107114205cut_811_932/',\
+        dir+'OLD_V100_DATA/20190107115723cut_774_895/',\
+        dir+'OLD_V100_DATA/20190107115723cut_789_910/',\
+        dir+'OLD_V100_DATA/20190107115723cut_931_1052/',\
+        dir+'OLD_V100_DATA/20190108095709cut_1942_2063/',\
+        dir+'OLD_V100_DATA/20190108095709cut_1948_2069/',\
+        dir+'OLD_V100_DATA/20190108095709cut_202_323/',\
+        dir+'OLD_V100_DATA/20190108095709cut_2214_2335/',\
+        dir+'OLD_V100_DATA/20190108095709cut_2634_2755/',\
+        dir+'OLD_V100_DATA/20190108095709cut_433_554/',\
+        dir+'OLD_V100_DATA/20190108095709cut_713_834/',\
+        dir+'OLD_V100_DATA/20190108100531cut_1965_2086/',\
+        dir+'OLD_V100_DATA/20190108100531cut_2449_2570/',\
+        dir+'OLD_V100_DATA/20190108100531cut_3008_3129/',\
+        dir+'OLD_V100_DATA/20190108102238cut_1120_1241/',\
+        dir+'OLD_V100_DATA/20190108102238cut_2010_2131/',\
+        dir+'OLD_V100_DATA/20190108102238cut_2377_2498/',\
+        dir+'OLD_V100_DATA/20190108102238cut_973_1094/',\
+        dir+'OLD_V100_DATA/20190108103001cut_4861_4982/',\
+        dir+'OLD_V100_DATA/20190108103712cut_1163_1284/',\
+        dir+'OLD_V100_DATA/20190108103712cut_426_547/',\
+        dir+'OLD_V100_DATA/20190108103712cut_856_977/',\
+        dir+'OLD_V100_DATA/20190108104615cut_3148_3269/',\
+        dir+'OLD_V100_DATA/20190108104615cut_3486_3607/',\
+        dir+'OLD_V100_DATA/20190108104615cut_4130_4251/',\
+        dir+'OLD_V100_DATA/20190108104615cut_4614_4735/',\
+        dir+'OLD_V100_DATA/20190108110112cut_1331_1452/',\
+        dir+'OLD_V100_DATA/20190108110112cut_1646_1767/',\
+        dir+'OLD_V100_DATA/20190108110112cut_1653_1774/',\
+        dir+'OLD_V100_DATA/20190108112437cut_1420_1541/',\
+        dir+'OLD_V100_DATA/20190108112437cut_1760_1881/',\
+        dir+'OLD_V100_DATA/20190108112437cut_1952_2073/',\
+        dir+'OLD_V100_DATA/20190108112437cut_95_216/',\
+        dir+'OLD_V100_DATA/20190109100635cut_1819_1940/',\
+        dir+'OLD_V100_DATA/20190109100635cut_2602_2723/',\
+        dir+'OLD_V100_DATA/20190109100635cut_906_1027/',\
+        dir+'OLD_V100_DATA/20190109101641cut_0_108/',\
+        dir+'OLD_V100_DATA/20190109102734cut_4550_4671/',\
+        dir+'OLD_V100_DATA/20190109102734cut_4759_4880/',\
+        dir+'OLD_V100_DATA/20190109102734cut_5498_5619/',\
+        dir+'OLD_V100_DATA/20190109110228cut_2042_2163/',\
+        dir+'OLD_V100_DATA/20190109110228cut_2589_2710/',\
+        dir+'OLD_V100_DATA/20190109110228cut_3519_3640/',\
+        dir+'OLD_V100_DATA/20190109110228cut_689_810/',\
+        dir+'OLD_V100_DATA/20190109110846cut_3171_3292/',\
+        dir+'OLD_V100_DATA/20190109110846cut_4101_4222/',\
+        dir+'OLD_V100_DATA/20190109110846cut_5115_5236/',\
+        dir+'OLD_V100_DATA/20190109114723cut_1065_1186/',\
+        dir+'OLD_V100_DATA/20190109114723cut_1418_1539/',\
+        dir+'OLD_V100_DATA/20190109114723cut_1641_1762/',\
+        dir+'OLD_V100_DATA/20190109114723cut_1937_2058/',\
+        dir+'OLD_V100_DATA/20190109115513cut_2283_2404/',\
+        dir+'OLD_V100_DATA/20190109115513cut_2707_2828/',\
+        dir+'OLD_V100_DATA/20190109115513cut_3003_3124/',\
+        dir+'OLD_V100_DATA/20190109120550cut_1322_1443/',\
+        dir+'OLD_V100_DATA/20190109120550cut_1693_1814/',\
+        dir+'OLD_V100_DATA/20190109120550cut_4555_4676/',\
+        dir+'OLD_V100_DATA/20190114103857cut_2307_2428/',\
+        dir+'OLD_V100_DATA/20190114103857cut_3007_3128/',\
+        dir+'OLD_V100_DATA/20190114103857cut_4661_4782/',\
+        dir+'OLD_V100_DATA/20190114112123cut_2257_2378/',\
+        dir+'OLD_V100_DATA/20190114112123cut_2753_2874/',\
+        dir+'OLD_V100_DATA/20190114112123cut_3152_3273/',\
+        dir+'OLD_V100_DATA/20190114112123cut_3460_3581/',\
+        dir+'OLD_V100_DATA/20190114112123cut_907_1028/',\
+        dir+'OLD_V100_DATA/20190115100259cut_2_123/',\
+        dir+'OLD_V100_DATA/20190115100259cut_3028_3149/',\
+        dir+'OLD_V100_DATA/20190115100259cut_417_538/',\
+        dir+'OLD_V100_DATA/20190115100259cut_941_1062/',\
+        dir+'OLD_V100_DATA/20190115101306cut_6805_6926/',\
+        dir+'OLD_V100_DATA/20190115101306cut_7976_8097/',\
+        dir+'OLD_V100_DATA/20190115101306cut_8315_8436/',\
+        dir+'OLD_V100_DATA/20190115101306cut_8416_8537/',\
+        dir+'OLD_V100_DATA/20190115103517cut_2078_2199/',\
+        dir+'OLD_V100_DATA/20190115103517cut_2418_2539/',\
+        dir+'OLD_V100_DATA/20190115103517cut_2714_2835/',\
+        dir+'OLD_V100_DATA/20190115104910cut_1136_1257/',\
+        dir+'OLD_V100_DATA/20190115104910cut_1183_1304/',\
+        dir+'OLD_V100_DATA/20190115105600cut_2301_2422/',\
+        dir+'OLD_V100_DATA/20190115111100cut_3245_3366/',\
+        dir+'OLD_V100_DATA/20190115111100cut_3414_3535/',\
+        dir+'OLD_V100_DATA/20190115111100cut_5467_5588/',\
+        dir+'OLD_V100_DATA/20190115111100cut_6186_6307/',\
+        dir+'OLD_V100_DATA/20190115112049cut_127_248/',\
+        dir+'OLD_V100_DATA/20190115112049cut_153_274/',\
+        dir+'OLD_V100_DATA/20190115112049cut_1738_1859/',\
+        dir+'OLD_V100_DATA/20190115114532cut_2046_2167/',\
+        dir+'OLD_V100_DATA/20190115114532cut_2526_2647/',\
+        dir+'OLD_V100_DATA/20190115114532cut_2547_2668/',\
+        dir+'OLD_V100_DATA/20190115114532cut_2760_2881/',\
+        dir+'OLD_V100_DATA/20190115115111cut_1317_1438/',\
+        dir+'OLD_V100_DATA/20190115115111cut_1943_2064/',\
+        dir+'OLD_V100_DATA/20190115115111cut_3072_3193/',\
+        dir+'OLD_V100_DATA/20190115115111cut_780_901/',\
+        dir+'OLD_V100_DATA/20190116100045cut_1130_1251/',\
+        dir+'OLD_V100_DATA/20190116100045cut_301_422/',\
+        dir+'OLD_V100_DATA/20190116100256cut_744_865/',\
+        dir+'OLD_V100_DATA/20190116100737cut_2632_2753/',\
+        dir+'OLD_V100_DATA/20190116100737cut_2683_2804/',\
+        dir+'OLD_V100_DATA/20190116100737cut_3062_3183/',\
+        dir+'OLD_V100_DATA/20190116100737cut_778_899/',\
+        dir+'OLD_V100_DATA/20190116100952cut_2586_2707/',\
+        dir+'OLD_V100_DATA/20190116103125cut_1007_1128/',\
+        dir+'OLD_V100_DATA/20190116103125cut_1229_1350/',\
+        dir+'OLD_V100_DATA/20190116103125cut_1546_1667/',\
+        dir+'OLD_V100_DATA/20190116103125cut_2098_2219/',\
+        dir+'OLD_V100_DATA/20190116103125cut_373_494/',\
+        dir+'OLD_V100_DATA/20190116103125cut_7_128/',\
+        dir+'OLD_V100_DATA/20190116103914cut_1250_1371/',\
+        dir+'OLD_V100_DATA/20190116103914cut_149_270/',\
+        dir+'OLD_V100_DATA/20190116103914cut_2173_2294/',\
+        dir+'OLD_V100_DATA/20190116103914cut_5535_5656/',\
+        dir+'OLD_V100_DATA/20190116105148cut_1062_1183/',\
+        dir+'OLD_V100_DATA/20190116105148cut_2827_2948/',\
+        dir+'OLD_V100_DATA/20190116105148cut_3386_3507/',\
+        dir+'OLD_V100_DATA/20190116120954cut_1214_1335/',\
+        dir+'OLD_V100_DATA/20190116120954cut_1549_1670/',\
+        dir+'OLD_V100_DATA/20190116120954cut_2395_2516/',\
+        dir+'OLD_V100_DATA/20190116120954cut_920_1041/',\
+        dir+'OLD_V100_DATA/20190117100106cut_13_134/',\
+        dir+'OLD_V100_DATA/20190117100106cut_2408_2529/',\
+        dir+'OLD_V100_DATA/20190117100106cut_293_414/',\
+        dir+'OLD_V100_DATA/20190117100106cut_707_828/',\
+        dir+'OLD_V100_DATA/20190117100106cut_723_844/',\
+        dir+'OLD_V100_DATA/20190117100800cut_1470_1591/',\
+        dir+'OLD_V100_DATA/20190117100800cut_2070_2191/',\
+        dir+'OLD_V100_DATA/20190117100800cut_3555_3676/',\
+        dir+'OLD_V100_DATA/20190117101938cut_2829_2950/',\
+        dir+'OLD_V100_DATA/20190117101938cut_3568_3689/',\
+        dir+'OLD_V100_DATA/20190117101938cut_4156_4277/',\
+        dir+'OLD_V100_DATA/20190117101938cut_5005_5126/',\
+        dir+'OLD_V100_DATA/20190117103620cut_1643_1764/',\
+        dir+'OLD_V100_DATA/20190117103620cut_1976_2097/',\
+        dir+'OLD_V100_DATA/20190117103620cut_2743_2864/',\
+        dir+'OLD_V100_DATA/20190117104141cut_2356_2477/',\
+        dir+'OLD_V100_DATA/20190117104141cut_2538_2659/',\
+        dir+'OLD_V100_DATA/20190117104141cut_5085_5206/',\
+        dir+'OLD_V100_DATA/20190117104141cut_5304_5425/',\
+        dir+'OLD_V100_DATA/20190117104141cut_5874_5995/',\
+        dir+'OLD_V100_DATA/20190117105551cut_3733_3854/',\
+        dir+'OLD_V100_DATA/20190117105551cut_4662_4783/',\
+        dir+'OLD_V100_DATA/20190117105551cut_4900_5021/',\
+        dir+'OLD_V100_DATA/20190117105551cut_4924_5045/',\
+        dir+'OLD_V100_DATA/20190117110757cut_5281_5402/',\
+        dir+'OLD_V100_DATA/20190117110757cut_5992_6113/',\
+        dir+'OLD_V100_DATA/20190117110757cut_6259_6380/',\
+        dir+'OLD_V100_DATA/20190117113409cut_1357_1478/',\
+        dir+'OLD_V100_DATA/20190117113409cut_4350_4471/',\
+        dir+'OLD_V100_DATA/20190117113409cut_903_1024/',\
+        dir+'OLD_V100_DATA/20190117114908cut_1068_1189/',\
+        dir+'OLD_V100_DATA/20190117114908cut_1856_1977/',\
+        dir+'OLD_V100_DATA/20190117114908cut_589_710/',\
+        dir+'OLD_V100_DATA/20190118100516cut_2261_2382/',\
+        dir+'OLD_V100_DATA/20190118100516cut_417_538/',\
+        dir+'OLD_V100_DATA/20190118100516cut_5208_5329/',\
+        dir+'OLD_V100_DATA/20190118102342cut_1438_1559/',\
+        dir+'OLD_V100_DATA/20190118102342cut_15_136/',\
+        dir+'OLD_V100_DATA/20190118102342cut_2971_3092/',\
+        dir+'OLD_V100_DATA/20190118103405cut_1133_1254/',\
+        dir+'OLD_V100_DATA/20190118103405cut_2308_2429/',\
+        dir+'OLD_V100_DATA/20190118103405cut_3078_3199/',\
+        dir+'OLD_V100_DATA/20190118103405cut_4132_4253/',\
+        dir+'OLD_V100_DATA/20190118113341cut_1607_1728/',\
+        dir+'OLD_V100_DATA/20190118113341cut_1907_2028/',\
+        dir+'OLD_V100_DATA/20190118113341cut_2117_2238/',\
+        dir+'OLD_V100_DATA/20190118114826cut_1856_1977/',\
+        dir+'OLD_V100_DATA/20190118114826cut_1894_2015/',\
+        dir+'OLD_V100_DATA/20190118114826cut_4899_5020/',\
+        dir+'OLD_V100_DATA/20190118114826cut_6387_6508/',\
+        dir+'OLD_V100_DATA/20190118114826cut_7050_7171/',\
+        dir+'OLD_V100_DATA/20190121160830cut_1788_1909/',\
+        dir+'OLD_V100_DATA/20190121161017cut_0_116/',\
+        dir+'OLD_V100_DATA/20190121161017cut_439_560/',\
+        dir+'OLD_V100_DATA/20190121161130cut_1476_1597/',\
+        dir+'OLD_V100_DATA/20190121161130cut_2325_2446/',\
+        dir+'OLD_V100_DATA/20190121161130cut_564_685/',\
+        dir+'OLD_V100_DATA/20190121162925cut_1650_1771/',\
+        dir+'OLD_V100_DATA/20190121162925cut_3034_3155/',\
+        dir+'OLD_V100_DATA/20190121162925cut_4110_4231/',\
+        dir+'OLD_V100_DATA/20190121162925cut_5186_5307/',\
+        dir+'OLD_V100_DATA/20190121162925cut_5988_6109/',\
+        dir+'OLD_V100_DATA/20190121163817cut_1109_1230/',\
+        dir+'OLD_V100_DATA/20190121163817cut_1331_1452/',\
+        dir+'OLD_V100_DATA/20190121163817cut_3519_3640/',\
+        dir+'OLD_V100_DATA/20190122161000cut_667_788/',\
+        dir+'OLD_V100_DATA/20190122165723cut_660_781/',\
+        dir+'OLD_V100_DATA/20190122165944cut_650_771/',\
+        dir+'OLD_V100_DATA/20190122165944cut_681_802/',\
+        dir+'OLD_V100_DATA/20190122165944cut_977_1098/',\
+        dir+'OLD_V100_DATA/20190327150008cut_6033_6154/',\
+        dir+'OLD_V100_DATA/20190327150008cut_7794_7915/',\
+        dir+'OLD_V100_DATA/20190327150008cut_9184_9305/',\
+        dir+'OLD_V100_DATA/20190328091224cut_1746_1867/',\
+        dir+'OLD_V100_DATA/20190328091224cut_932_1053/',\
+        dir+'OLD_V100_DATA/20190328091224cut_974_1095/',\
+        dir+'OLD_V100_DATA/20190328095920cut_1358_1479/',\
+        dir+'OLD_V100_DATA/20190328095920cut_632_753/',\
+        dir+'OLD_V100_DATA/20190328095920cut_962_1083/',\
+        dir+'OLD_V100_DATA/20190328101451cut_1837_1958/',\
+        dir+'OLD_V100_DATA/20190328101451cut_2475_2596/',\
+        dir+'OLD_V100_DATA/20190328101451cut_2509_2630/',\
+        dir+'OLD_V100_DATA/20190328101451cut_3396_3517/',\
+        dir+'OLD_V100_DATA/20190328101451cut_3410_3531/',\
+        dir+'OLD_V100_DATA/20190328143541cut_4399_4520/',\
+        dir+'OLD_V100_DATA/20190328143541cut_5063_5184/',\
+        dir+'OLD_V100_DATA/20190328143541cut_5749_5870/',\
+        dir+'OLD_V100_DATA/20190328143541cut_5775_5896/',\
+        dir+'OLD_V100_DATA/20190329101039cut_607_728/',\
+        dir+'OLD_V100_DATA/20190329101039cut_790_911/',\
+        dir+'OLD_V100_DATA/20190329101039cut_810_931/',\
+        dir+'OLD_V100_DATA/20190329101039cut_961_1082/',\
+        dir+'OLD_V100_DATA/20190329102042cut_3773_3894/',\
+        dir+'OLD_V100_DATA/20190329102042cut_4817_4938/',\
+        dir+'OLD_V100_DATA/20190329102042cut_4865_4986/',\
+        dir+'OLD_V100_DATA/20190329102042cut_4981_5102/',\
+        dir+'OLD_V100_DATA/20190329103203cut_3396_3517/',\
+        dir+'OLD_V100_DATA/20190329103203cut_3568_3689/',\
+        dir+'OLD_V100_DATA/20190329103203cut_3748_3869/',\
+        dir+'OLD_V100_DATA/20190329103203cut_4051_4172/',\
+        dir+'OLD_V100_DATA/20190329105032cut_2711_2832/',\
+        dir+'OLD_V100_DATA/20190329105032cut_3050_3171/',\
+        dir+'OLD_V100_DATA/20190329105032cut_4355_4476/',\
+        dir+'OLD_V100_DATA/20190329112339cut_5395_5516/',\
+        dir+'OLD_V100_DATA/20190329112339cut_6187_6308/',\
+        dir+'OLD_V100_DATA/20190329112339cut_6895_7016/',\
+        dir+'OLD_V100_DATA/20190329113729cut_1210_1331/',\
+        dir+'OLD_V100_DATA/20190329113729cut_1528_1649/',\
+        dir+'OLD_V100_DATA/20190329113729cut_2242_2363/',\
+        dir+'OLD_V100_DATA/20190329114511cut_1338_1459/',\
+        dir+'OLD_V100_DATA/20190329114511cut_4554_4675/',\
+        dir+'OLD_V100_DATA/20190329114511cut_4803_4924/',\
+        dir+'OLD_V100_DATA/20190329114511cut_519_640/',\
+        dir+'OLD_V100_DATA/20190401100138cut_1486_1607/',\
+        dir+'OLD_V100_DATA/20190401100138cut_1916_2037/',\
+        dir+'OLD_V100_DATA/20190401100138cut_810_931/',\
+        dir+'OLD_V100_DATA/20190401101803cut_2844_2965/',\
+        dir+'OLD_V100_DATA/20190401101803cut_3816_3937/',\
+        dir+'OLD_V100_DATA/20190401101803cut_4368_4489/',\
+        dir+'OLD_V100_DATA/20190401101803cut_5385_5506/',\
+        dir+'OLD_V100_DATA/20190401102952cut_2041_2162/',\
+        dir+'OLD_V100_DATA/20190401102952cut_2487_2608/',\
+        dir+'OLD_V100_DATA/20190401102952cut_706_827/',\
+        dir+'OLD_V100_DATA/20190401105534cut_1550_1671/',\
+        dir+'OLD_V100_DATA/20190401105852cut_627_748/',\
+        dir+'OLD_V100_DATA/20190401105852cut_753_874/',\
+        dir+'OLD_V100_DATA/20190401105852cut_946_1067/',\
+        dir+'OLD_V100_DATA/20190401110631cut_1763_1884/',\
+        dir+'OLD_V100_DATA/20190401110631cut_2330_2451/',\
+        dir+'OLD_V100_DATA/20190401110631cut_2335_2456/',\
+        dir+'OLD_V100_DATA/20190401110631cut_748_869/',\
+        dir+'OLD_V100_DATA/20190402095431cut_2771_2892/',\
+        dir+'OLD_V100_DATA/20190402095431cut_3158_3279/',\
+        dir+'OLD_V100_DATA/20190402095431cut_3783_3904/',\
+        dir+'OLD_V100_DATA/20190402101634cut_2163_2284/',\
+        dir+'OLD_V100_DATA/20190402101634cut_2312_2433/',\
+        dir+'OLD_V100_DATA/20190402101634cut_2993_3114/',\
+        dir+'OLD_V100_DATA/20190402101634cut_5590_5711/',\
+        dir+'OLD_V100_DATA/20190402103447cut_10532_10653/',\
+        dir+'OLD_V100_DATA/20190402103447cut_2030_2151/',\
+        dir+'OLD_V100_DATA/20190402103447cut_5361_5482/',\
+        dir+'OLD_V100_DATA/20190402103447cut_6035_6156/',\
+        dir+'OLD_V100_DATA/20190402103447cut_7004_7125/',\
+        dir+'OLD_V100_DATA/20190402105345cut_2037_2158/',\
+        dir+'OLD_V100_DATA/20190402105345cut_2355_2476/',\
+        dir+'OLD_V100_DATA/20190402105345cut_3408_3529/',\
+        dir+'OLD_V100_DATA/20190402111721cut_2995_3116/',\
+        dir+'OLD_V100_DATA/20190402111721cut_3424_3545/',\
+        dir+'OLD_V100_DATA/20190402111721cut_4081_4202/',\
+        dir+'OLD_V100_DATA/20190402111721cut_4363_4484/',\
+        dir+'OLD_V100_DATA/20190402111721cut_4751_4872/',\
+        dir+'OLD_V100_DATA/20190404100436cut_4110_4231/',\
+        dir+'OLD_V100_DATA/20190404100436cut_4366_4487/',\
+        dir+'OLD_V100_DATA/20190404100436cut_4715_4836/',\
+        dir+'OLD_V100_DATA/20190404100436cut_4855_4976/',\
+        dir+'OLD_V100_DATA/20190404104529cut_4823_4944/',\
+        dir+'OLD_V100_DATA/20190404104529cut_5008_5129/',\
+        dir+'OLD_V100_DATA/20190404104529cut_5569_5690/',\
+        dir+'OLD_V100_DATA/20190404111305cut_5734_5855/',\
+        dir+'OLD_V100_DATA/20190404111305cut_6378_6499/',\
+        dir+'OLD_V100_DATA/20190404111305cut_6841_6962/',\
+        dir+'OLD_V100_DATA/20190404111305cut_7372_7493/',\
+        dir+'OLD_V100_DATA/20190404112910cut_2415_2536/',\
+        dir+'OLD_V100_DATA/20190404112910cut_4131_4252/',\
+        dir+'OLD_V100_DATA/20190404112910cut_4365_4486/',\
+        dir+'OLD_V100_DATA/20190404112910cut_5508_5629/',\
+        dir+'OLD_V100_DATA/20190404114440cut_8876_8997/',\
+        dir+'OLD_V100_DATA/20190404133851cut_2724_2845/',\
+        dir+'OLD_V100_DATA/20190404133851cut_4273_4394/',\
+        dir+'OLD_V100_DATA/20190404133851cut_4620_4741/',\
+        dir+'OLD_V100_DATA/20190404133851cut_5131_5252/',\
+        dir+'OLD_V100_DATA/20190408122837cut_1429_1550/',\
+        dir+'OLD_V100_DATA/20190408122837cut_2799_2920/',\
+        dir+'OLD_V100_DATA/20190408122837cut_3117_3238/',\
+        dir+'OLD_V100_DATA/20190408122837cut_968_1089/',\
+        dir+'OLD_V100_DATA/20190408123813cut_5845_5966/',\
+        dir+'OLD_V100_DATA/20190408123813cut_6159_6280/',\
+        dir+'OLD_V100_DATA/20190408123813cut_7055_7176/',\
+        dir+'OLD_V100_DATA/20190408125219cut_1873_1994/',\
+        dir+'OLD_V100_DATA/20190408125219cut_3557_3678/',\
+        dir+'OLD_V100_DATA/20190408125219cut_7740_7861/',\
+        dir+'OLD_V100_DATA/20190408130413cut_3938_4059/',\
+        dir+'OLD_V100_DATA/20190408130413cut_4232_4353/',\
+        dir+'OLD_V100_DATA/20190408130413cut_4923_5044/',\
+        dir+'OLD_V100_DATA/20190408132709cut_3677_3798/',\
+        dir+'OLD_V100_DATA/20190408132709cut_4142_4263/',\
+        dir+'OLD_V100_DATA/20190408132709cut_8148_8269/',\
+        dir+'OLD_V100_DATA/20190409095720cut_2372_2493/',\
+        dir+'OLD_V100_DATA/20190409095720cut_2880_3001/',\
+        dir+'OLD_V100_DATA/20190409095720cut_6858_6979/',\
+        dir+'OLD_V100_DATA/20190409095720cut_6910_7031/',\
+        dir+'OLD_V100_DATA/20190409095720cut_7695_7816/',\
+        dir+'OLD_V100_DATA/20190409102747cut_2876_2997/',\
+        dir+'OLD_V100_DATA/20190409102747cut_3737_3858/',\
+        dir+'OLD_V100_DATA/20190409102747cut_4154_4275/',\
+        dir+'OLD_V100_DATA/20190409102747cut_4599_4720/',\
+        dir+'OLD_V100_DATA/20190409104049cut_2619_2740/',\
+        dir+'OLD_V100_DATA/20190409104049cut_2937_3058/',\
+        dir+'OLD_V100_DATA/20190409104049cut_3534_3655/',\
+        dir+'OLD_V100_DATA/20190409104049cut_3784_3905/',\
+        dir+'OLD_V100_DATA/20190409105049cut_2181_2302/',\
+        dir+'OLD_V100_DATA/20190409105049cut_2799_2920/',\
+        dir+'OLD_V100_DATA/20190409105049cut_3085_3206/',\
+        dir+'OLD_V100_DATA/20190409105049cut_3530_3651/',\
+        dir+'OLD_V100_DATA/20190409110104cut_10920_11041/',\
+        dir+'OLD_V100_DATA/20190409110104cut_5386_5507/',\
+        dir+'OLD_V100_DATA/20190409110104cut_9522_9643/',\
+        dir+'OLD_V100_DATA/20190410102209cut_2002_2123/',\
+        dir+'OLD_V100_DATA/20190410102209cut_3533_3654/',\
+        dir+'OLD_V100_DATA/20190410102209cut_4461_4582/',\
+        dir+'OLD_V100_DATA/20190410102209cut_4767_4888/',\
+        dir+'OLD_V100_DATA/20190410103938cut_7179_7300/',\
+        dir+'OLD_V100_DATA/20190410103938cut_7615_7736/',\
+        dir+'OLD_V100_DATA/20190410103938cut_9087_9208/',\
+        dir+'OLD_V100_DATA/20190410103938cut_9407_9528/',\
+        dir+'OLD_V100_DATA/20190410131328cut_7_128/',\
+        dir+'OLD_V100_DATA/20190410131818cut_100_221/',\
+        dir+'OLD_V100_DATA/20190410131818cut_565_686/',\
+        dir+'OLD_V100_DATA/20190410132451cut_10065_10186/',\
+        dir+'OLD_V100_DATA/20190410132451cut_10561_10682/',\
+        dir+'OLD_V100_DATA/20190410132451cut_11199_11320/',\
+        dir+'OLD_V100_DATA/20190410132451cut_11339_11460/',\
+        dir+'OLD_V100_DATA/20190410132451cut_12209_12330/',\
+        dir+'OLD_V100_DATA/20190410132451cut_5766_5887/',\
+        dir+'OLD_V100_DATA/20190410132451cut_6107_6228/',\
+        dir+'OLD_V100_DATA/20190411100735cut_1529_1650/',\
+        dir+'OLD_V100_DATA/20190411100735cut_2007_2128/',\
+        dir+'OLD_V100_DATA/20190411100735cut_3171_3292/',\
+        dir+'OLD_V100_DATA/20190411101811cut_3836_3957/',\
+        dir+'OLD_V100_DATA/20190411101811cut_5217_5338/',\
+        dir+'OLD_V100_DATA/20190411101811cut_5561_5682/',\
+        dir+'OLD_V100_DATA/20190411101811cut_6015_6136/',\
+        dir+'OLD_V100_DATA/20190411103018cut_1417_1538/',\
+        dir+'OLD_V100_DATA/20190411103018cut_1707_1828/',\
+        dir+'OLD_V100_DATA/20190411103018cut_5050_5171/',\
+        dir+'OLD_V100_DATA/20190411103018cut_5117_5238/',\
+        dir+'OLD_V100_DATA/20190411105711cut_5371_5492/',\
+        dir+'OLD_V100_DATA/20190411105711cut_5853_5974/',\
+        dir+'OLD_V100_DATA/20190411105711cut_6057_6178/',\
+        dir+'OLD_V100_DATA/20190411105711cut_7053_7174/',\
+        dir+'OLD_V100_DATA/20190411113257cut_2750_2871/',\
+        dir+'OLD_V100_DATA/20190411113257cut_3043_3164/',\
+        dir+'OLD_V100_DATA/20190411113257cut_3282_3403/',\
+        dir+'OLD_V100_DATA/20190411113257cut_3432_3553/',\
+        dir+'OLD_V100_DATA/20190411113257cut_3520_3641/',\
+        dir+'OLD_V100_DATA/20190411113257cut_4005_4126/',\
+        dir+'OLD_V100_DATA/20190411114209cut_14566_14687/',\
+        dir+'OLD_V100_DATA/20190411114209cut_14924_15045/',\
+        dir+'OLD_V100_DATA/20190411114209cut_15636_15757/',\
+        dir+'OLD_V100_DATA/20190411114209cut_15791_15912/',\
+        dir+'OLD_V100_DATA/20190411114209cut_15916_16037/',\
+        dir+'OLD_V100_DATA/20190411114209cut_16018_16139/',\
+        dir+'OLD_V100_DATA/20190411114209cut_16796_16917/',\
+        dir+'OLD_V100_DATA/20190411114209cut_17416_17537/',\
+        dir+'OLD_V100_DATA/20190411114209cut_8691_8812/',\
+        dir+'OLD_V100_DATA/20190411115902cut_7047_7168/',\
+        dir+'OLD_V100_DATA/20190411115902cut_7814_7935/',\
+        dir+'OLD_V100_DATA/20190411115902cut_8068_8189/',\
+        dir+'OLD_V100_DATA/20190411115902cut_8090_8211/',\
+        dir+'OLD_V100_DATA/20190412100304cut_21309_21430/',\
+        dir+'OLD_V100_DATA/20190412100304cut_21860_21981/',\
+        dir+'OLD_V100_DATA/20190412100304cut_22382_22503/',\
+        dir+'OLD_V100_DATA/20190412100304cut_22548_22669/',\
+        dir+'OLD_V100_DATA/20190412103556cut_10020_10141/',\
+        dir+'OLD_V100_DATA/20190412103556cut_4602_4723/',\
+        dir+'OLD_V100_DATA/20190412103556cut_7302_7423/',\
+        dir+'OLD_V100_DATA/20190412104933cut_4825_4946/',\
+        dir+'OLD_V100_DATA/20190412104933cut_4895_5016/',\
+        dir+'OLD_V100_DATA/20190412104933cut_5112_5233/',\
+        dir+'OLD_V100_DATA/20190412104933cut_5967_6088/',\
+        dir+'OLD_V100_DATA/20190412104933cut_6821_6942/',\
+        dir+'OLD_V100_DATA/20190412110043cut_4773_4894/',\
+        dir+'OLD_V100_DATA/20190412110043cut_4866_4987/',\
+        dir+'OLD_V100_DATA/20190412110043cut_4904_5025/',\
+        dir+'OLD_V100_DATA/20190412110043cut_5024_5145/',\
+        dir+'OLD_V100_DATA/20190412110043cut_5237_5358/',\
+        dir+'OLD_V100_DATA/20190412110043cut_7880_8001/',\
+        dir+'OLD_V100_DATA/20190412112316cut_10523_10644/',\
+        dir+'OLD_V100_DATA/20190412112316cut_11294_11415/',\
+        dir+'OLD_V100_DATA/20190412112316cut_8599_8720/',\
+        dir+'OLD_V100_DATA/20190412112316cut_8789_8910/',\
+        dir+'OLD_V100_DATA/20190412112316cut_9729_9850/',\
+        dir+'OLD_V100_DATA/20190412113514cut_1936_2057/',\
+        dir+'OLD_V100_DATA/20190412113514cut_2154_2275/',\
+        dir+'OLD_V100_DATA/20190412113514cut_4090_4211/',\
+        dir+'OLD_V100_DATA/20190412113514cut_4158_4279/',\
+        dir+'OLD_V100_DATA/20190412113514cut_4369_4490/',\
+        dir+'OLD_V100_DATA/20190412115634cut_12629_12750/',\
+        dir+'OLD_V100_DATA/20190412115634cut_5947_6068/',\
+        dir+'OLD_V100_DATA/20190412115634cut_6219_6340/',\
+        dir+'OLD_V100_DATA/20190412115634cut_6774_6895/',\
+        dir+'OLD_V100_DATA/20190412115634cut_7138_7259/',\
+        dir+'OLD_V100_DATA/20190412121652cut_1675_1796/',\
+        dir+'OLD_V100_DATA/20190412121652cut_2071_2192/',\
+        dir+'OLD_V100_DATA/20190412121652cut_2395_2516/',\
+        dir+'OLD_V100_DATA/20190412121652cut_3420_3541/',\
+        dir+'OLD_V100_DATA/20190412121652cut_3521_3642/',\
+        dir+'OLD_V100_DATA/20190412121652cut_3967_4088/',\
+        dir+'OLD_V100_DATA/20190412121652cut_4401_4522/',\
+        dir+'OLD_V100_DATA/20190412121652cut_5697_5818/',\
+        dir+'OLD_V100_DATA/20190412121652cut_6656_6777/',\
+        dir+'OLD_V100_DATA/20190426102307cut_11421_11542/',\
+        dir+'OLD_V100_DATA/20190426102307cut_9947_10068/',\
+        dir+'OLD_V100_DATA/20190426103919cut_5899_6020/',\
+        dir+'OLD_V100_DATA/20190426103919cut_7247_7368/',\
+        dir+'OLD_V100_DATA/20190426150456cut_2633_2754/',\
+        dir+'OLD_V100_DATA/20190426150456cut_2638_2759/',\
+        dir+'OLD_V100_DATA/20190426150456cut_4429_4550/',\
+        dir+'OLD_V100_DATA/20190426150456cut_4694_4815/',\
+        dir+'OLD_V100_DATA/20190426150456cut_5286_5407/',\
+        dir+'OLD_V100_DATA/20190426165235cut_1488_1609/',\
+        dir+'OLD_V100_DATA/20190426165235cut_2448_2569/',\
+        dir+'OLD_V100_DATA/20190426165235cut_2564_2685/',\
+        dir+'OLD_V100_DATA/20190426165235cut_5508_5629/',\
+        dir+'OLD_V100_DATA/20190426165235cut_5785_5906/',\
+        dir+'OLD_V100_DATA/20190428100917cut_4278_4399/',\
+        dir+'OLD_V100_DATA/20190428100917cut_4708_4829/',\
+        dir+'OLD_V100_DATA/20190428100917cut_5058_5179/',\
+        dir+'OLD_V100_DATA/20190428100917cut_5446_5567/',\
+        dir+'OLD_V100_DATA/20190428100917cut_5716_5837/',\
+        dir+'OLD_V100_DATA/20190428100917cut_7476_7597/',\
+        dir+'OLD_V100_DATA/20190428103100cut_2817_2938/',\
+        dir+'OLD_V100_DATA/20190428103100cut_4243_4364/',\
+        dir+'OLD_V100_DATA/20190428103100cut_5092_5213/',\
+        dir+'OLD_V100_DATA/20190428104631cut_3462_3583/',\
+        dir+'OLD_V100_DATA/20190428104631cut_4419_4540/',\
+        dir+'OLD_V100_DATA/20190428104631cut_7738_7859/',\
+        dir+'OLD_V100_DATA/20190428110024cut_4276_4397/',\
+        dir+'OLD_V100_DATA/20190428110738cut_3680_3801/',\
+        dir+'OLD_V100_DATA/20190428111221cut_4310_4431/',\
+        dir+'OLD_V100_DATA/20190428111221cut_5442_5563/',\
+        dir+'OLD_V100_DATA/20190428111221cut_6532_6653/',\
+        dir+'OLD_V100_DATA/20190428113435cut_5614_5735/',\
+        dir+'OLD_V100_DATA/20190428113435cut_5934_6055/',\
+        dir+'OLD_V100_DATA/20190428113435cut_8551_8672/',\
+        dir+'OLD_V100_DATA/20190428114338cut_10468_10589/',\
+        dir+'OLD_V100_DATA/20190428114338cut_10979_11100/',\
+        dir+'OLD_V100_DATA/20190428114338cut_11488_11609/',\
+        dir+'OLD_V100_DATA/20190428114338cut_12673_12794/',\
+        dir+'OLD_V100_DATA/20190428114338cut_13451_13572/',\
+        dir+'OLD_V100_DATA/20190428114338cut_14025_14146/',\
+        dir+'OLD_V100_DATA/20190428115924cut_5626_5747/',\
+        dir+'OLD_V100_DATA/20190428115924cut_5890_6011/',\
+        dir+'OLD_V100_DATA/20190428115924cut_7779_7900/',\
+        dir+'OLD_V100_DATA/20190428115924cut_8523_8644/',\
+        dir+'OLD_V100_DATA/20190428120954cut_4633_4754/',\
+        dir+'OLD_V100_DATA/20190428120954cut_7478_7599/',\
+        dir+'OLD_V100_DATA/20190428120954cut_8332_8453/',\
+        dir+'OLD_V100_DATA/20190428122213cut_7498_7619/',\
+        dir+'OLD_V100_DATA/20190428122213cut_9492_9613/',\
+        dir+'OLD_V100_DATA/20190428122213cut_9535_9656/',\
+        dir+'OLD_V100_DATA/20190428124248cut_5024_5145/',\
+        dir+'OLD_V100_DATA/20190428124248cut_5187_5308/',\
+        dir+'OLD_V100_DATA/20190428124248cut_5392_5513/',\
+        dir+'OLD_V100_DATA/20190429095918cut_1285_1406/',\
+        dir+'OLD_V100_DATA/20190429095918cut_1757_1878/',\
+        dir+'OLD_V100_DATA/20190429095918cut_3235_3356/',\
+        dir+'OLD_V100_DATA/20190429095918cut_683_804/',\
+        dir+'OLD_V100_DATA/20190429100633cut_2166_2287/',\
+        dir+'OLD_V100_DATA/20190429100633cut_2250_2371/',\
+        dir+'OLD_V100_DATA/20190429100633cut_2449_2570/',\
+        dir+'OLD_V100_DATA/20190429100633cut_2744_2865/',\
+        dir+'OLD_V100_DATA/20190429100633cut_3020_3141/',\
+        dir+'OLD_V100_DATA/20190429100633cut_3963_4084/',\
+        dir+'OLD_V100_DATA/20190429105404cut_10806_10927/',\
+        dir+'OLD_V100_DATA/20190429105404cut_12597_12718/',\
+        dir+'OLD_V100_DATA/20190429105404cut_13050_13171/',\
+        dir+'OLD_V100_DATA/20190429105404cut_14805_14926/',\
+        dir+'OLD_V100_DATA/20190429105404cut_4687_4808/',\
+        dir+'OLD_V100_DATA/20190429105404cut_8460_8581/',\
+        dir+'OLD_V100_DATA/20190429105404cut_9484_9605/',\
+        dir+'OLD_V100_DATA/20190429105404cut_9520_9641/',\
+        dir+'OLD_V100_DATA/20190429112457cut_10352_10473/',\
+        dir+'OLD_V100_DATA/20190429112457cut_10437_10558/',\
+        dir+'OLD_V100_DATA/20190429112457cut_8249_8370/',\
+        dir+'OLD_V100_DATA/20190429112457cut_9681_9802/',\
+        dir+'OLD_V100_DATA/20190429113626cut_2943_3064/',\
+        dir+'OLD_V100_DATA/20190429113626cut_5419_5540/',\
+        dir+'OLD_V100_DATA/20190429113626cut_9277_9398/',\
+        dir+'OLD_V100_DATA/20190429114817cut_2873_2994/',\
+        dir+'OLD_V100_DATA/20190429114817cut_3077_3198/',\
+        dir+'OLD_V100_DATA/20190429114817cut_3308_3429/',\
+        dir+'OLD_V100_DATA/20190429114817cut_3578_3699/',\
+        dir+'OLD_V100_DATA/20190429114817cut_3802_3923/',\
+        dir+'OLD_V100_DATA/20190429114817cut_4099_4220/',\
+        dir+'OLD_V100_DATA/20190429120633cut_5944_6065/',\
+        dir+'OLD_V100_DATA/20190429120633cut_7354_7475/',\
+        dir+'OLD_V100_DATA/20190429120633cut_7800_7921/',\
+        dir+'OLD_V100_DATA/20190429122619cut_13651_13772/',\
+        dir+'OLD_V100_DATA/20190429122619cut_13826_13947/',\
+        dir+'OLD_V100_DATA/20190429122619cut_13914_14035/',\
+        dir+'OLD_V100_DATA/20190429122619cut_9839_9960/',\
+        dir+'OLD_V100_DATA/20190429122619cut_9956_10077/',\
+        dir+'OLD_V100_DATA/20190429124229cut_3204_3325/',\
+        dir+'OLD_V100_DATA/20190429124229cut_8481_8602/',\
+        dir+'OLD_V100_DATA/20190429124229cut_9012_9133/',\
+        dir+'OLD_V100_DATA/20190429125236cut_1662_1783/',\
+        dir+'OLD_V100_DATA/20190429125236cut_2156_2277/',\
+        dir+'OLD_V100_DATA/20190429125236cut_2536_2657/',\
+        dir+'OLD_V100_DATA/20190430100448cut_5728_5849/',\
+        dir+'OLD_V100_DATA/20190430100448cut_5734_5855/',\
+        dir+'OLD_V100_DATA/20190430100448cut_8572_8693/',\
+        dir+'OLD_V100_DATA/20190430101342cut_5369_5490/',\
+        dir+'OLD_V100_DATA/20190430101342cut_7646_7767/',\
+        dir+'OLD_V100_DATA/20190430101342cut_7986_8107/',\
+        dir+'OLD_V100_DATA/20190430104524cut_4505_4626/',\
+        dir+'OLD_V100_DATA/20190430104524cut_5103_5224/',\
+        dir+'OLD_V100_DATA/20190430104524cut_6667_6788/',\
+        dir+'OLD_V100_DATA/20190430105526cut_10377_10498/',\
+        dir+'OLD_V100_DATA/20190430105526cut_8322_8443/',\
+        dir+'OLD_V100_DATA/20190430105526cut_8377_8498/',\
+        dir+'OLD_V100_DATA/20190430115516cut_2636_2757/',\
+        dir+'OLD_V100_DATA/20190430115516cut_4607_4728/',\
+        dir+'OLD_V100_DATA/20190430115516cut_6667_6788/',\
+        dir+'OLD_V100_DATA/20190430121757cut_1397_1518/',\
+        dir+'OLD_V100_DATA/20190430121757cut_2650_2771/',\
+        dir+'OLD_V100_DATA/20190430121757cut_4477_4598/',\
+        dir+'OLD_V100_DATA/20190430122746cut_1536_1657/',\
+        dir+'OLD_V100_DATA/20190430122746cut_5743_5864/',\
+        dir+'OLD_V100_DATA/20190430122746cut_6246_6367/',\
+        dir+'OLD_V100_DATA/20190430123438cut_2414_2535/',\
+        dir+'OLD_V100_DATA/20190430123438cut_2443_2564/',\
+        dir+'OLD_V100_DATA/20190430123438cut_2946_3067/',\
+        dir+'OLD_V100_DATA/20190430123438cut_5384_5505/',\
+        dir+'OLD_V100_DATA/20190430124146cut_2970_3091/',\
+        dir+'OLD_V100_DATA/20190430124146cut_4187_4308/',\
+        dir+'OLD_V100_DATA/20190430124146cut_4998_5119/',\
+        dir+'OLD_V100_DATA/20190430124146cut_5279_5400/',\
+        dir+'OLD_V100_DATA/20190430124945cut_5598_5719/',\
+        dir+'OLD_V100_DATA/20190430124945cut_6066_6187/',\
+        dir+'OLD_V100_DATA/20190430124945cut_6229_6350/',\
+        dir+'OLD_V100_DATA/20190430130029cut_2202_2323/',\
+        dir+'OLD_V100_DATA/20190430130029cut_7845_7966/',\
+        dir+'OLD_V100_DATA/20190430130029cut_8223_8344/',\
+        dir+'OLD_V100_DATA/20190505101904cut_3429_3550/',\
+        dir+'OLD_V100_DATA/20190505101904cut_3541_3662/',\
+        dir+'OLD_V100_DATA/20190505101904cut_5449_5570/',\
+        dir+'OLD_V100_DATA/20190505101904cut_8412_8533/',\
+        dir+'OLD_V100_DATA/20190505102724cut_5319_5440/',\
+        dir+'OLD_V100_DATA/20190505102724cut_6436_6557/',\
+        dir+'OLD_V100_DATA/20190505102724cut_6628_6749/',\
+        dir+'OLD_V100_DATA/20190505102724cut_7901_8022/',\
+        dir+'OLD_V100_DATA/20190505104823cut_2124_2245/',\
+        dir+'OLD_V100_DATA/20190505104823cut_3206_3327/',\
+        dir+'OLD_V100_DATA/20190505104823cut_3671_3792/',\
+        dir+'OLD_V100_DATA/20190505104823cut_3819_3940/',\
+        dir+'OLD_V100_DATA/20190505110914cut_2622_2743/',\
+        dir+'OLD_V100_DATA/20190505110914cut_3015_3136/',\
+        dir+'OLD_V100_DATA/20190505110914cut_3360_3481/',\
+        dir+'OLD_V100_DATA/20190505110914cut_3464_3585/',\
+        dir+'OLD_V100_DATA/20190505110914cut_3736_3857/',\
+        dir+'OLD_V100_DATA/20190505110914cut_4531_4652/',\
+        dir+'OLD_V100_DATA/20190505121332cut_2470_2591/',\
+        dir+'OLD_V100_DATA/20190505122054cut_3049_3170/',\
+        dir+'OLD_V100_DATA/20190505122054cut_3758_3879/',\
+        dir+'OLD_V100_DATA/20190505122054cut_4464_4585/',\
+        dir+'OLD_V100_DATA/20190505122952cut_2713_2834/',\
+        dir+'OLD_V100_DATA/20190505122952cut_3286_3407/',\
+        dir+'OLD_V100_DATA/20190505122952cut_4685_4806/',\
+        dir+'OLD_V100_DATA/20190506101625cut_7050_7171/',\
+        dir+'OLD_V100_DATA/20190506101625cut_7373_7494/',\
+        dir+'OLD_V100_DATA/20190506101625cut_8470_8591/',\
+        dir+'OLD_V100_DATA/20190506101625cut_9756_9877/',\
+        dir+'OLD_V100_DATA/20190506102625cut_3923_4044/',\
+        dir+'OLD_V100_DATA/20190506102625cut_5050_5171/',\
+        dir+'OLD_V100_DATA/20190506102625cut_6215_6336/',\
+        dir+'OLD_V100_DATA/20190507172943cut_7541_7662/',\
+        dir+'OLD_V100_DATA/20190507172943cut_8041_8162/',\
+        dir+'OLD_V100_DATA/20190507172943cut_8980_9101/',\
+        dir+'OLD_V100_DATA/20190703123638cut_1098_1219/',\
+        dir+'OLD_V100_DATA/20190703123638cut_150_271/',\
+        dir+'OLD_V100_DATA/20190703123638cut_1593_1714/',\
+        dir+'OLD_V100_DATA/20190703123638cut_1929_2050/',\
+        dir+'OLD_V100_DATA/20190703123638cut_3821_3942/',\
+        dir+'OLD_V100_DATA/20190703123638cut_6590_6711/',\
+        dir+'OLD_V100_DATA/20190703133901cut_4364_4485/',\
+        dir+'OLD_V100_DATA/20190703133901cut_5195_5316/',\
+        dir+'OLD_V100_DATA/20190703133901cut_5577_5698/',\
+        dir+'OLD_V100_DATA/20190703140045cut_6255_6376/',\
+        dir+'OLD_V100_DATA/20190703140045cut_6434_6555/',\
+        dir+'OLD_V100_DATA/20190703140045cut_7341_7462/',\
+        dir+'OLD_V100_DATA/20190703151509cut_4088_4209/',\
+        dir+'OLD_V100_DATA/20190703151509cut_4518_4639/',\
+        dir+'OLD_V100_DATA/20190703151509cut_5896_6017/',\
+        dir+'OLD_V100_DATA/20190703151509cut_5930_6051/',\
+        dir+'OLD_V100_DATA/20190703154956cut_3836_3957/',\
+        dir+'OLD_V100_DATA/20190703154956cut_5042_5163/',\
+        dir+'OLD_V100_DATA/20190703154956cut_6987_7108/',\
+        dir+'OLD_V100_DATA/20190703154956cut_7275_7396/',\
+        dir+'OLD_V100_DATA/20190703154956cut_7646_7767/',\
+        dir+'OLD_V100_DATA/20190703161506cut_12295_12416/',\
+        dir+'OLD_V100_DATA/20190703161506cut_1343_1464/',\
+        dir+'OLD_V100_DATA/20190703161506cut_14473_14594/',\
+        dir+'OLD_V100_DATA/20190703161506cut_9550_9671/',\
+        dir+'OLD_V100_DATA/20190703170345cut_5248_5369/',\
+        dir+'OLD_V100_DATA/20190703170345cut_8345_8466/',\
+        dir+'OLD_V100_DATA/20190703170345cut_8803_8924/',\
+        dir+'OLD_V100_DATA/20190703175533cut_2243_2364/',\
+        dir+'OLD_V100_DATA/20190703175533cut_2559_2680/',\
+        dir+'OLD_V100_DATA/20190703175533cut_8322_8443/',\
+        dir+'OLD_V100_DATA/20190802091622cut_10089_10210/',\
+        dir+'OLD_V100_DATA/20190802091622cut_10843_10964/',\
+        dir+'OLD_V100_DATA/20190802091622cut_11130_11251/',\
+        dir+'OLD_V100_DATA/20190802091622cut_8970_9091/',\
+        dir+'OLD_V100_DATA/20190802091622cut_9444_9565/',\
+        dir+'OLD_V100_DATA/20190802093208cut_3493_3614/',\
+        dir+'OLD_V100_DATA/20190802093208cut_4754_4875/',\
+        dir+'OLD_V100_DATA/20190802093208cut_6527_6648/',\
+        dir+'OLD_V100_DATA/20190802093208cut_7782_7903/',\
+        dir+'OLD_V100_DATA/20190802105854cut_2281_2402/',\
+        dir+'OLD_V100_DATA/20190802105854cut_6208_6329/',\
+        dir+'OLD_V100_DATA/20190802105854cut_6679_6800/',\
+        dir+'OLD_V100_DATA/20190802105854cut_6747_6868/',\
+        dir+'OLD_V100_DATA/20190802120427cut_2959_3080/',\
+        dir+'OLD_V100_DATA/20190802120427cut_3137_3258/',\
+        dir+'OLD_V100_DATA/20190802120427cut_3445_3566/',\
+        dir+'OLD_V100_DATA/20190802140031cut_3313_3434/',\
+        dir+'OLD_V100_DATA/20190802140031cut_3851_3972/',\
+        dir+'OLD_V100_DATA/20190802140031cut_4382_4503/',\
+        dir+'OLD_V100_DATA/20190802151802cut_4717_4838/',\
+        dir+'OLD_V100_DATA/20190802151802cut_4913_5034/',\
+        dir+'OLD_V100_DATA/20190802151802cut_5246_5367/',\
+        dir+'OLD_V100_DATA/20190802151802cut_5820_5941/',\
+        dir+'OLD_V100_DATA/20190802161335cut_2062_2183/',\
+        dir+'OLD_V100_DATA/20190802161335cut_2332_2453/',\
+        dir+'OLD_V100_DATA/20190802161335cut_3185_3306/',\
+        dir+'OLD_V100_DATA/20190802161335cut_3758_3879/',\
+        dir+'OLD_V100_DATA/20190802161335cut_3911_4032/',\
+        dir+'OLD_V100_DATA/20190919093443cut_3449_3570/',\
+        dir+'OLD_V100_DATA/20190919093443cut_3571_3692/',\
+        dir+'OLD_V100_DATA/20190919093443cut_3988_4109/',\
+        dir+'OLD_V100_DATA/20190919102431cut_14401_14522/',\
+        dir+'OLD_V100_DATA/20190919102431cut_20443_20564/',\
+        dir+'OLD_V100_DATA/20190919102431cut_20673_20794/',\
+        dir+'glycocalyx/20210330171319cut_0_66/',\
+        dir+'glycocalyx/20210330171319cut_0_70/',\
+        dir+'glycocalyx/20210330171319cut_1200_1321/',\
+        dir+'glycocalyx/20210330171319cut_1203_1324/',\
+        dir+'glycocalyx/20210330171319cut_1233_1354/',\
+        dir+'glycocalyx/20210330171319cut_1242_1363/',\
+        dir+'glycocalyx/20210330171319cut_1289_1410/',\
+        dir+'glycocalyx/20210330171319cut_1340_1461/',\
+        dir+'glycocalyx/20210330171319cut_1345_1466/',\
+        dir+'glycocalyx/20210330171319cut_1384_1505/',\
+        dir+'glycocalyx/20210330171319cut_1388_1509/',\
+        dir+'glycocalyx/20210330171319cut_1422_1543/',\
+        dir+'glycocalyx/20210330171319cut_1472_1593/',\
+        dir+'glycocalyx/20210330171319cut_1584_1705/',\
+        dir+'glycocalyx/20210330171319cut_1626_1747/',\
+        dir+'glycocalyx/20210330171319cut_1659_1780/',\
+        dir+'glycocalyx/20210330171319cut_1660_1781/',\
+        dir+'glycocalyx/20210330171319cut_1720_1841/',\
+        dir+'glycocalyx/20210330171319cut_1756_1877/',\
+        dir+'glycocalyx/20210330171319cut_654_775/',\
+        dir+'glycocalyx/20210413152810cut_41_162/',\
+        dir+'glycocalyx/20210413152810cut_779_900/',\
+        dir+'glycocalyx/20210413170036cut_0_106/',\
+        dir+'glycocalyx/20210413170036cut_454_575/',\
+        dir+'glycocalyx/20210413170356cut_1064_1185/',\
+        dir+'glycocalyx/20210413170356cut_522_643/',\
+        dir+'glycocalyx/20210413170356cut_608_729/',\
+        dir+'glycocalyx/20210413170356cut_761_882/',\
+        dir+'glycocalyx/20210708093500cut_0_60/',\
+        dir+'glycocalyx/20210708114141cut_0_60/',\
+        dir+'glycocalyx/20210708114141cut_0_61/',\
+        dir+'glycocalyx/20210708114141cut_1329_1450/',\
+        dir+'glycocalyx/20210708114141cut_2649_2770/',\
+        dir+'glycocalyx/20210708114141cut_3424_3545/',\
+        dir+'glycocalyx/20210709093938cut_0_66/',\
+        dir+'glycocalyx/20210709093938cut_444_565/',\
+        dir+'glycocalyx/20210709093938cut_88_209/',\
+        dir+'glycocalyx/20210709152001cut_3170_3291/',\
+        dir+'glycocalyx/20210709152001cut_5907_6028/',\
+        dir+'glycocalyx/20210711100637cut_1436_1557/',\
+        dir+'glycocalyx/20210711100637cut_2936_3057/',\
+        dir+'glycocalyx/20210711100637cut_5018_5139/',\
+        dir+'glycocalyx/20210713105051cut_0_109/',\
+        dir+'glycocalyx/20210715093501cut_0_110/',\
+        dir+'glycocalyx/20210715093501cut_543_664/',\
+        dir+'glycocalyx/20210715111117cut_8146_8267/',\
+        dir+'glycocalyx/20210716121551cut_149_270/',\
+        dir+'glycocalyx/20210716121551cut_2543_2664/',\
+        dir+'glycocalyx/20210716121551cut_3991_4112/',\
+        dir+'glycocalyx/20210716121551cut_4824_4945/',\
+        dir+'glycocalyx/20210716121551cut_5385_5506/',\
+        dir+'glycocalyx/20210716122602cut_1950_2071/',\
+        dir+'glycocalyx/20210716170012cut_3231_3352/',\
+        dir+'glycocalyx/20210716170012cut_3549_3670/',\
+        dir+'glycocalyx/20210717102247cut_4057_4178/',\
+        dir+'glycocalyx/20210717102247cut_60_181/',\
+        dir+'glycocalyx/20210717104039cut_96_217/',\
+        dir+'glycocalyx/20210718100137cut_4987_5108/',\
+        dir+'glycocalyx/20210718100137cut_6539_6660/',\
+        dir+'glycocalyx/20210718113037cut_3371_3492/',\
+        dir+'glycocalyx/20210718113037cut_3996_4117/',\
+        dir+'glycocalyx/20210718113037cut_5059_5180/',\
+        dir+'glycocalyx/20210718115612cut_210_331/',\
+        dir+'glycocalyx/20210718115612cut_2583_2704/',\
+        dir+'glycocalyx/20210719090515cut_6110_6231/',\
+        dir+'glycocalyx/20210719090515cut_8913_9034/',\
+        dir+'glycocalyx/20210719092017cut_1945_2066/',\
+        dir+'glycocalyx/20210719092017cut_2531_2652/',\
+        dir+'glycocalyx/20210719092017cut_3268_3389/',\
+        dir+'glycocalyx/20210719092017cut_3633_3754/',\
+        dir+'glycocalyx/20210719110519cut_3463_3584/',\
+        dir+'glycocalyx/20210719112320cut_463_584/',\
+        dir+'glycocalyx/20210727173852cut_8858_8979/',\
+        dir+'glycocalyx/20210805161454cut_2552_2673/',\
+        dir+'glycocalyx/20210805161454cut_7119_7240/',\
+        dir+'glycocalyx/20210806181753cut_3263_3384/',\
+        dir+'glycocalyx/20210806181753cut_6760_6881/',\
+        dir+'glycocalyx/20210806183441cut_1195_1316/',\
+        dir+'glycocalyx/20210806183441cut_5307_5428/',\
+        dir+'glycocalyx/20210808102213cut_3768_3889/',\
+        dir+'glycocalyx/20210808102213cut_5088_5209/',\
+        dir+'glycocalyx/20210810151840cut_1086_1207/',\
+        dir+'glycocalyx/20210810151840cut_4018_4139/',\
+        dir+'glycocalyx/20210812104758cut_2360_2481/',\
+        dir+'glycocalyx/20210812105827cut_3278_3399/',\
+        dir+'glycocalyx/20210812105827cut_5966_6087/',\
+        dir+'glycocalyx/20210812105827cut_7104_7225/',\
+        dir+'glycocalyx/20210812105827cut_7629_7750/',\
+        dir+'glycocalyx/20210814101405cut_2752_2873/',\
+        dir+'glycocalyx/20210814101405cut_3593_3714/',\
+        dir+'glycocalyx/20210814102832cut_3855_3976/',\
+        dir+'glycocalyx/20210814102832cut_4422_4543/',\
+        dir+'glycocalyx/20210910215502cut_2242_2363/',\
+        dir+'glycocalyx/20210910215502cut_3745_3866/',\
+        dir+'glycocalyx/20210910215502cut_5346_5467/',\
+        dir+'glycocalyx/20210911185351cut_2218_2339/',\
+        dir+'glycocalyx/20210911185351cut_374_495/',\
+        dir+'glycocalyx/20210916173829cut_1436_1557/',\
+        dir+'glycocalyx/20210916173829cut_2230_2351/',\
+        dir+'glycocalyx/20210916173829cut_436_557/',\
+        dir+'glycocalyx/20210916173829cut_920_1041/',\
+        dir+'glycocalyx/20210926114702cut_2079_2200/',\
+        dir+'glycocalyx/20210926114702cut_3880_4001/',\
+        dir+'glycocalyx/20210927111629cut_2774_2895/',\
+        dir+'glycocalyx/20210927111629cut_3152_3273/',\
+        dir+'glycocalyx/20210927111629cut_3360_3481/',\
+        dir+'glycocalyx/20210927111629cut_515_636/',\
+        dir+'glycocalyx/20210927111629cut_717_838/',\
+        dir+'glycocalyx/20211008155239cut_161_282/',\
+        dir+'glycocalyx/20211008155239cut_2048_2169/',\
+        dir+'glycocalyx/20211008155239cut_2610_2731/',\
+        dir+'glycocalyx/20211009095013cut_1292_1413/',\
+        dir+'glycocalyx/20211009095013cut_1741_1862/',\
+        dir+'glycocalyx/20211009095013cut_448_569/',\
+        dir+'glycocalyx/20211009095013cut_948_1069/',\
+        dir+'glycocalyx/20211009104839cut_1309_1430/',\
+        dir+'glycocalyx/20211009104839cut_2186_2307/',\
+        dir+'glycocalyx/20211009104839cut_2524_2645/',\
+        dir+'glycocalyx/20211009104839cut_3169_3290/',\
+        dir+'glycocalyx/20211010122230cut_1201_1322/',\
+        dir+'glycocalyx/20211010122230cut_2545_2666/',\
+        dir+'glycocalyx/20211010122230cut_7344_7465/',\
+        dir+'glycocalyx/20211010123337cut_2115_2236/',\
+        dir+'glycocalyx/20211010123337cut_2533_2654/',\
+        dir+'glycocalyx/20211010123337cut_3429_3550/',\
+        dir+'glycocalyx/20211010123337cut_5878_5999/',\
+        dir+'glycocalyx/20211011102259cut_111_232/',\
+        dir+'glycocalyx/20211011102259cut_2297_2418/',\
+        dir+'glycocalyx/20211011102259cut_969_1090/',\
+        dir+'glycocalyx/20211012094630cut_1462_1583/',\
+        dir+'glycocalyx/20211012101232cut_0_86/',\
+        dir+'glycocalyx/20211012101232cut_1170_1291/',\
+        dir+'glycocalyx/20211012101232cut_3766_3887/',\
+        dir+'glycocalyx/20211012101232cut_4171_4292/',\
+        dir+'glycocalyx/20211012101232cut_4957_5078/',\
+        dir+'glycocalyx/20211012172539cut_1200_1321/',\
+        dir+'glycocalyx/20211012172539cut_556_677/',\
+        dir+'glycocalyx/20211014173113cut_1210_1331/',\
+        dir+'glycocalyx/20211014173113cut_4184_4305/',\
+        dir+'glycocalyx/20211014173113cut_7247_7368/',\
+        dir+'glycocalyx/20211014173113cut_8017_8138/',\
+        dir+'glycocalyx/20211016091128cut_1125_1246/',\
+        dir+'glycocalyx/20211016091128cut_1314_1435/',\
+        dir+'glycocalyx/20211016091128cut_1984_2105/',\
+        dir+'glycocalyx/20211016091128cut_2396_2517/',\
+        dir+'glycocalyx/20211016091128cut_2826_2947/',\
+        dir+'glycocalyx/20211016091128cut_3418_3539/',\
+        dir+'glycocalyx/20211016091438cut_1294_1415/',\
+        dir+'glycocalyx/20211016091438cut_2465_2586/',\
+        dir+'glycocalyx/20211016091438cut_3126_3247/',\
+        dir+'glycocalyx/20211017084601cut_1346_1467/',\
+        dir+'glycocalyx/20211017084601cut_1719_1840/',\
+        dir+'glycocalyx/20211017084601cut_2497_2618/',\
+        dir+'glycocalyx/20211017084601cut_2704_2825/',\
+        dir+'glycocalyx/20211017084601cut_3070_3191/',\
+        dir+'glycocalyx/20211017084601cut_348_469/',\
+        dir+'glycocalyx/20211017084601cut_3919_4040/',\
+        dir+'glycocalyx/20211017090145cut_14_135/',\
+        dir+'glycocalyx/20211017090145cut_2274_2395/',\
+        dir+'glycocalyx/20211017090145cut_3744_3865/',\
+        dir+'glycocalyx/20211017091130cut_3419_3540/',\
+        dir+'glycocalyx/20211017091130cut_4393_4514/',\
+        dir+'glycocalyx/20211017092049cut_4766_4887/',\
+        dir+'glycocalyx/20211017092049cut_4791_4912/',\
+        dir+'glycocalyx/20211018093435cut_682_803/',\
+        dir+'glycocalyx/20211018093435cut_817_938/',\
+        dir+'glycocalyx/20211018095227cut_3310_3431/',\
+        dir+'glycocalyx/20211018095227cut_3491_3612/',\
+        dir+'glycocalyx/20211018095227cut_4104_4225/',\
+        dir+'glycocalyx/20211018095227cut_4577_4698/',\
+        dir+'glycocalyx/20211019193109cut_2763_2884/',\
+        dir+'glycocalyx/20211019193109cut_2981_3102/',\
+        dir+'glycocalyx/20211019193109cut_3420_3541/',\
+        dir+'glycocalyx/20211019193109cut_3819_3940/',\
+        dir+'glycocalyx/20211019193109cut_761_882/',\
+        dir+'glycocalyx/20211111102614cut_690_811/',\
+        dir+'glycocalyx/20211112114817cut_1878_1999/',\
+        dir+'glycocalyx/20211112114817cut_5015_5136/',\
+        dir+'glycocalyx/20211118120809cut_11108_11229/',\
+        dir+'glycocalyx/20211118120809cut_1585_1706/',\
+        dir+'glycocalyx/20211118120809cut_6230_6351/',\
+        dir+'glycocalyx/20211118121608cut_1799_1920/',\
+        dir+'glycocalyx/20211118121608cut_2373_2494/',\
+        dir+'glycocalyx/20211118121608cut_2654_2775/',\
+        dir+'glycocalyx/20211119100036cut_1506_1627/',\
+        dir+'glycocalyx/20211119100036cut_4051_4172/',\
+        dir+'glycocalyx/20211119100036cut_4291_4412/',\
+        dir+'glycocalyx/20211119100036cut_5203_5324/',\
+        dir+'glycocalyx/20211119103150cut_2073_2194/',\
+        dir+'glycocalyx/20211119103150cut_229_350/',\
+        dir+'glycocalyx/20211119103150cut_2424_2545/',\
+        dir+'glycocalyx/20211119103150cut_792_913/',\
+        dir+'glycocalyx/20211208183730cut_2721_2842/',\
+        dir+'glycocalyx/20211208183730cut_3989_4110/',\
+        dir+'glycocalyx/20211208183730cut_4151_4272/',\
+        dir+'glycocalyx/20211208183730cut_5912_6033/',\
+        dir+'glycocalyx/20211208183730cut_759_880/',\
+        dir+'glycocalyx/20211210095841cut_0_80/',\
+        dir+'glycocalyx/20211210095841cut_1392_1513/',\
+        dir+'glycocalyx/20211210095841cut_3953_4074/',\
+        dir+'glycocalyx/20211210095841cut_4650_4771/',\
+        dir+'glycocalyx/20211210100813cut_1470_1591/',\
+        dir+'glycocalyx/20211210100813cut_2480_2601/',\
+        dir+'glycocalyx/20211210100813cut_3478_3599/',\
+        dir+'glycocalyx/20211210100813cut_4020_4141/',\
+        dir+'glycocalyx/20211210100813cut_4263_4384/',\
+        dir+'glycocalyx/20211213110455cut_152_273/',\
+        dir+'glycocalyx/20211213110857cut_1401_1522/',\
+        dir+'glycocalyx/20211213110857cut_2444_2565/',\
+        dir+'glycocalyx/20211215103915cut_1144_1265/',\
+        dir+'glycocalyx/20211215103915cut_1437_1558/',\
+        dir+'glycocalyx/20211215103915cut_1887_2008/',\
+        dir+'glycocalyx/20211215103915cut_2630_2751/',\
+        dir+'glycocalyx/20211215103915cut_2665_2786/',\
+        dir+'glycocalyx/20211215103915cut_484_605/',\
+        dir+'glycocalyx/20211215103915cut_974_1095/',\
+        dir+'glycocalyx/20211217161543cut_319_440/',\
+        dir+'glycocalyx/20211217161543cut_394_515/',\
+        dir+'glycocalyx/20211217161543cut_682_803/',\
+        dir+'glycocalyx/20211217161543cut_988_1109/',\
+        dir+'glycocalyx/20211218095950cut_1059_1180/',\
+        dir+'glycocalyx/20211218095950cut_1206_1327/',\
+        dir+'glycocalyx/20211218095950cut_3014_3135/',\
+        dir+'glycocalyx/20211218095950cut_3939_4060/',\
+        dir+'glycocalyx/20211218095950cut_4140_4261/',\
+        dir+'glycocalyx/20211218095950cut_4775_4896/',\
+        dir+'glycocalyx/20211221133842cut_1208_1329/',\
+        dir+'glycocalyx/20211221133842cut_209_330/',\
+        dir+'glycocalyx/20211221133842cut_3362_3483/',\
+        dir+'glycocalyx/20211221133842cut_5077_5198/',\
+        dir+'glycocalyx/20211221133842cut_5549_5670/',\
+        dir+'glycocalyx/20220126111521cut_1791_1912/',\
+        dir+'glycocalyx/20220126111521cut_1853_1974/',\
+        dir+'glycocalyx/20220209110223cut_6766_6887/',\
+        dir+'glycocalyx/20220209110223cut_7080_7201/',\
+        dir+'glycocalyx/20220209110813cut_1094_1215/',\
+        dir+'glycocalyx/20220210102615cut_5426_5547/',\
+        dir+'glycocalyx/20220214104012cut_1610_1731/',\
+        dir+'glycocalyx/20220214104012cut_1889_2010/',\
+        dir+'glycocalyx/20220214104012cut_2954_3075/',\
+        dir+'glycocalyx/20220214104012cut_3904_4025/',\
+        dir+'glycocalyx/20220214104012cut_3909_4030/',\
+        dir+'glycocalyx/20220216103330cut_1077_1198/',\
+        dir+'glycocalyx/20220216103330cut_1459_1580/',\
+        dir+'glycocalyx/20220217112917cut_1430_1551/',\
+        dir+'glycocalyx/20220217112917cut_2435_2556/',\
+        dir+'glycocalyx/20220217112917cut_3022_3143/',\
+        dir+'glycocalyx/20220217112917cut_3353_3474/',\
+        dir+'glycocalyx/20220217112917cut_439_560/',\
+        dir+'glycocalyx/20220217112917cut_977_1098/',\
+        dir+'glycocalyx/20220227093234cut_1542_1663/',\
+        dir+'glycocalyx/20220227093234cut_3283_3404/',\
+        dir+'glycocalyx/20220227093234cut_3571_3692/',\
+        dir+'glycocalyx/20220227093234cut_866_987/',\
+        dir+'glycocalyx/20220307095058cut_2692_2813/',\
+        dir+'glycocalyx/20220307095058cut_2845_2966/',\
+        dir+'glycocalyx/20220307095058cut_3912_4033/',\
+        dir+'glycocalyx/20220309103303cut_1526_1647/',\
+        dir+'glycocalyx/20220309103303cut_3040_3161/',\
+        dir+'glycocalyx/20220309103303cut_3058_3179/',\
+        dir+'glycocalyx/20220309103303cut_3587_3708/',\
+        dir+'glycocalyx/20220310124132cut_1444_1565/',\
+        dir+'glycocalyx/20220310124132cut_1823_1944/',\
+        dir+'glycocalyx/20220310124132cut_2173_2294/',\
+        dir+'glycocalyx/20220310124132cut_3975_4096/'\
+]</l>
+</body>
+<docu id="samplepaths">
+<parameters>
+<parameter id="dir"/>
+<parameter id="paths"/>
+</parameters>
+</docu>
+</procedure>
+<procedure name="region_stabilization">
+<interface>
+<io>
+<par name="RegionUnionPrev" base_type="iconic" dimension="0"/>
+<par name="RegionUnionRear" base_type="iconic" dimension="0"/>
+</io>
+<ic>
+<par name="Width" base_type="ctrl" dimension="0"/>
+<par name="Height" base_type="ctrl" dimension="0"/>
+</ic>
+<oc>
+<par name="MaxIntersectAreaRow" base_type="ctrl" dimension="0"/>
+<par name="MaxIntersectAreaCol" base_type="ctrl" dimension="0"/>
+</oc>
+</interface>
+<body>
+<l>MaxIntersectAreaRow := 0</l>
+<l>MaxIntersectAreaCol := 0</l>
+<l>maxIntersectArea := 0</l>
+<c></c>
+<c>* 前帧到后帧的差异区域</c>
+<l>difference (RegionUnionRear, RegionUnionPrev, RegionDifference)</l>
+<c></c>
+<l>area_center(RegionDifference, AreaRegionDifference, useless, useless)</l>
+<l>if(AreaRegionDifference==0)</l>
+<l>    return()</l>
+<l>endif</l>
+<c></c>
+<c>* 计算差异区域在各行的宽度</c>
+<l>tuple_gen_sequence (0, Height-1, 1, RowCoors)</l>
+<l>tuple_gen_const (Height, 0, Zeros)</l>
+<l>tuple_gen_const (Height, Width-1, ColCoors)</l>
+<l>gen_region_line (lines, RowCoors, Zeros, RowCoors, ColCoors)</l>
+<l>intersection (lines, RegionDifference, RegionIntersection)</l>
+<l>connection (RegionIntersection, ConnectedRegions)</l>
+<l>area_center (ConnectedRegions, dis_Row, useless, useless)</l>
+<c></c>
+<c>* 计算差异区域在各列的高度</c>
+<l>tuple_gen_sequence (0, Width-1, 1, ColCoors)</l>
+<l>tuple_gen_const (Width, 0, Zeros)</l>
+<l>tuple_gen_const (Width, Height-1, RowCoors)</l>
+<l>gen_region_line (lines, Zeros, ColCoors, RowCoors, ColCoors)</l>
+<l>intersection (lines, RegionDifference, RegionIntersection)</l>
+<l>connection (RegionIntersection, ConnectedRegions)</l>
+<l>area_center (ConnectedRegions, dis_Col, useless, useless)</l>
+<c></c>
+<c>* 最大距离的正负作为粗对齐范围 方差作为步进粗对齐距离</c>
+<l>tuple_max (dis_Row, maxRowDis)</l>
+<l>tuple_deviation (dis_Row, deviationRowDis)</l>
+<l>tuple_max (dis_Col, maxColDis)</l>
+<l>tuple_deviation (dis_Col, deviationColDis)</l>
+<c></c>
+<l>skeleton(RegionUnionPrev, SkeletonUnionPrev)</l>
+<l>skeleton(RegionUnionRear, SkeletonUnionRear)</l>
+<c></c>
+<c>* 粗对齐 找出一个横向纵向位移后 能使-&gt;前后帧血管区域重叠面积最大&lt;-的位移数值</c>
+<c>* 注意：这里是为了减少后面细对齐位移的次数</c>
+<l>for Row := -maxRowDis to maxRowDis by deviationRowDis</l>
+<l>    for Col := -maxColDis to maxColDis by deviationColDis</l>
+<l>        vector_angle_to_rigid (0, 0, 0, Row, Col, 0, HomMat2D)</l>
+<l>        affine_trans_region (SkeletonUnionPrev, SkeletonUnionPrevTrans, HomMat2D, 'nearest_neighbor')</l>
+<l>        intersection (SkeletonUnionPrevTrans, RegionUnionRear, RegionIntersect)</l>
+<c>        </c>
+<l>        area_center (RegionIntersect, AreaRegionIntersect, useless, useless)</l>
+<c>        </c>
+<l>        if (AreaRegionIntersect &gt; maxIntersectArea)</l>
+<l>            maxIntersectArea := AreaRegionIntersect</l>
+<l>            MaxIntersectAreaRow := Row</l>
+<l>            MaxIntersectAreaCol := Col</l>
+<l>        endif</l>
+<l>    endfor</l>
+<l>endfor</l>
+<c></c>
+<c>* 细对齐 将前帧的血管区域移动至的重叠面积最大的地方 达到防抖的效果</c>
+<c>* J循环是为了多找一次 提高精度</c>
+<l>maxIntersectAreaRowCopy := MaxIntersectAreaRow</l>
+<l>maxIntersectAreaColCopy := MaxIntersectAreaCol</l>
+<l>for J := 0 to 1 by 1</l>
+<l>    for X := -2.56 to 2.56 by 0.04</l>
+<l>        vector_angle_to_rigid (0, 0, 0, MaxIntersectAreaRow, maxIntersectAreaColCopy+X, 0, HomMat2D)</l>
+<l>        affine_trans_region (SkeletonUnionPrev, SkeletonUnionPrevTrans, HomMat2D, 'nearest_neighbor')</l>
+<l>        intersection (SkeletonUnionPrevTrans, RegionUnionRear, RegionIntersect)</l>
+<c>        </c>
+<l>        area_center (RegionIntersect, AreaRegionIntersect, useless, useless)</l>
+<c>        </c>
+<l>        if (AreaRegionIntersect &gt; maxIntersectArea)</l>
+<l>            maxIntersectArea := AreaRegionIntersect</l>
+<l>            MaxIntersectAreaCol := maxIntersectAreaColCopy+X</l>
+<l>        endif</l>
+<l>    endfor</l>
+<c></c>
+<l>    for Y := -2.56 to 2.56 by 0.04</l>
+<l>        vector_angle_to_rigid (0, 0, 0, maxIntersectAreaRowCopy+Y, MaxIntersectAreaCol, 0, HomMat2D)</l>
+<l>        affine_trans_region (SkeletonUnionPrev, SkeletonUnionPrevTrans, HomMat2D, 'nearest_neighbor')</l>
+<l>        intersection (SkeletonUnionPrevTrans, RegionUnionRear, RegionIntersect)</l>
+<c>        </c>
+<l>        area_center (RegionIntersect, AreaRegionIntersect, useless, useless)</l>
+<c>        </c>
+<l>        if (AreaRegionIntersect &gt; maxIntersectArea)</l>
+<l>            maxIntersectArea := AreaRegionIntersect</l>
+<l>            MaxIntersectAreaRow := maxIntersectAreaRowCopy+Y</l>
+<l>        endif</l>
+<l>    endfor</l>
+<l>endfor</l>
+<c>* **************************************消抖+提取完整血管区域END***************************************</c>
+<c></c>
+<l>return()</l>
+</body>
+<docu id="region_stabilization">
+<parameters>
+<parameter id="Height"/>
+<parameter id="MaxIntersectAreaCol"/>
+<parameter id="MaxIntersectAreaRow"/>
+<parameter id="RegionUnionPrev"/>
+<parameter id="RegionUnionRear"/>
+<parameter id="Width"/>
+</parameters>
+</docu>
+</procedure>
+<procedure name="imagelist_antishake">
+<interface>
+<io>
+<par name="ImageList" base_type="iconic" dimension="0"/>
+</io>
+<oo>
+<par name="RegionVesselConcat" base_type="iconic" dimension="0"/>
+<par name="ImageGaussConcat" base_type="iconic" dimension="0"/>
+</oo>
+<ic>
+<par name="AntiShakeFrameNumber" base_type="ctrl" dimension="0"/>
+<par name="path" base_type="ctrl" dimension="0"/>
+<par name="pathloop" base_type="ctrl" dimension="0"/>
+<par name="debug" base_type="ctrl" dimension="0"/>
+</ic>
+<oc>
+<par name="TupleProcessImageIndex" base_type="ctrl" dimension="0"/>
+<par name="TupleTranPrevToRearRows" base_type="ctrl" dimension="0"/>
+<par name="TupleTranPrevToRearCols" base_type="ctrl" dimension="0"/>
+</oc>
+</interface>
+<body>
+<l>TupleProcessImageIndex:=[]</l>
+<l>TupleTranPrevToRearRows:=[]</l>
+<l>TupleTranPrevToRearCols:=[]</l>
+<c></c>
+<c>* 首帧预处理 对应的变量用在后续的后帧缓存</c>
+<c>* 注：在CPP端会确保首帧必然清晰才开始录像</c>
+<l>select_obj(ImageList, ImagePrev, 1)</l>
+<l>get_image_size(ImagePrev, Width, Height)</l>
+<c></c>
+<l>if(pathloop)</l>
+<l>    dev_close_window()</l>
+<l>    dev_open_window(10, 10, Width, Height, 'black', WindowHandle)</l>
+<l>    dev_disp_text(path, 'window', 'top', 'left', 'forest green', [], [])</l>
+<l>endif</l>
+<c></c>
+<l>pre_process (ImagePrev, ImagePrevGauss, RegionVesselPrev)</l>
+<c></c>
+<c>* 防抖后的合并掩膜</c>
+<l>gen_rectangle1(RegionAntiShakeMergeMask, 0, 0, Height, Width)</l>
+<c></c>
+<c>* 图像面积</c>
+<l>AreaImage:=Width*Height</l>
+<c></c>
+<c>* 遍历图像序列</c>
+<l>count_obj(ImageList, ImageListNumber)</l>
+<l>for I:=2 to ImageListNumber by 1</l>
+<c>    * 后一帧预处理</c>
+<l>    select_obj(ImageList, ImageRear, I)</l>
+<l>    pre_process (ImageRear, ImageRearGauss, RegionVesselRear)</l>
+<l>    if(Width==0 or Height==0)</l>
+<l>        continue</l>
+<l>    endif</l>
+<c>    </c>
+<c>    * 后帧血管区域判空 若为空 next one</c>
+<l>    area_center(RegionVesselRear, AreaRegionVesselRear, useless, useless)</l>
+<l>    if(|AreaRegionVesselRear| == 0 or -1 == AreaRegionVesselRear or 0 == AreaRegionVesselRear)</l>
+<l>        continue</l>
+<l>    endif</l>
+<c>    </c>
+<c>    * 不清晰的也不要 next one</c>
+<l>    get_image_sharpness (ImageRear, Sharpness, IsSharp)</l>
+<l>    if(IsSharp==false)</l>
+<l>        continue</l>
+<l>    endif</l>
+<c>    </c>
+<l>    region_stabilization (RegionVesselPrev, RegionVesselRear, Width, Height, MaxIntersectAreaRow, MaxIntersectAreaCol)</l>
+<c>    </c>
+<c>    * 最终找到最佳的前帧对齐到后帧的位移数值</c>
+<l>    vector_angle_to_rigid (0, 0, 0, MaxIntersectAreaRow, MaxIntersectAreaCol, 0, HomMat2DPrevToRear)</l>
+<c>    </c>
+<c>    * 移动掩膜</c>
+<l>    affine_trans_region(RegionAntiShakeMergeMask, RegionAntiShakeMergeMaskTrans, HomMat2DPrevToRear, 'nearest_neighbor')</l>
+<c>    </c>
+<c>    * 如果掩膜已经移动得仅剩60%面积 说明抖动过大 不再进行下去</c>
+<l>    area_center(RegionAntiShakeMergeMaskTrans, AreaRegionAntiShakeMergeMaskTrans, useless, useless)</l>
+<l>    if(AreaRegionAntiShakeMergeMaskTrans&lt;AreaImage*0.6)</l>
+<l>        break</l>
+<l>    endif</l>
+<l>    RegionAntiShakeMergeMask:=RegionAntiShakeMergeMaskTrans</l>
+<c>    </c>
+<c>    * 记录 处理帧序号/位移行列</c>
+<l>    TupleProcessImageIndex:=[TupleProcessImageIndex, I-1]</l>
+<l>    TupleTranPrevToRearRows:=[TupleTranPrevToRearRows, MaxIntersectAreaRow]</l>
+<l>    TupleTranPrevToRearCols:=[TupleTranPrevToRearCols, MaxIntersectAreaCol]</l>
+<c>    </c>
+<c>    * 记录合并血管区域和细胞轨迹</c>
+<l>    if(|TupleProcessImageIndex|&gt;1)</l>
+<l>        concat_obj(RegionVesselConcat, RegionVesselPrev, RegionVesselConcat)</l>
+<l>        concat_obj (ImageGaussConcat, ImagePrevGauss, ImageGaussConcat)</l>
+<c>        </c>
+<l>        if(debug)</l>
+<l>            affine_trans_region(RegionVesselConcatDebug, RegionVesselConcatDebug, HomMat2DPrevToRear, 'nearest_neighbor')</l>
+<l>            affine_trans_region(RegionVesselPrev, RegionVesselPrevDebug, HomMat2DPrevToRear, 'nearest_neighbor')</l>
+<l>            concat_obj(RegionVesselConcatDebug, RegionVesselPrevDebug, RegionVesselConcatDebug)</l>
+<l>        endif</l>
+<l>    else</l>
+<l>        RegionVesselConcat:=RegionVesselPrev</l>
+<l>        ImageGaussConcat := ImagePrevGauss</l>
+<c>        </c>
+<l>        if(debug)</l>
+<l>            RegionVesselConcatDebug:=RegionVesselPrev</l>
+<l>        endif</l>
+<l>    endif</l>
+<c>    </c>
+<c>    * 调试显示</c>
+<l>    if(debug)</l>
+<l>        union1(RegionVesselConcatDebug, UnionRegionVesselConcatDebug)</l>
+<l>        boundary(UnionRegionVesselConcatDebug, BorderRegionVesselConcatDebug, 'inner')</l>
+<l>        dev_clear_window()</l>
+<l>        dev_display(ImageRear)</l>
+<l>        dev_display(BorderRegionVesselConcatDebug)</l>
+<l>        dev_disp_text(path, 'window', 'top', 'left', 'forest green', [], [])</l>
+<l>    endif</l>
+<c>    </c>
+<l>    if(|TupleProcessImageIndex|&gt;=AntiShakeFrameNumber)</l>
+<l>        break</l>
+<l>    endif</l>
+<c>    </c>
+<c>    * 前帧变后帧</c>
+<l>    ImagePrevGauss:=ImageRearGauss</l>
+<l>    RegionVesselPrev := RegionVesselRear</l>
+<l>endfor</l>
+<c></c>
+<l>return ()</l>
+</body>
+<docu id="imagelist_antishake">
+<parameters>
+<parameter id="AntiShakeFrameNumber"/>
+<parameter id="ImageGaussConcat"/>
+<parameter id="ImageList"/>
+<parameter id="RegionVesselConcat"/>
+<parameter id="TupleProcessImageIndex"/>
+<parameter id="TupleTranPrevToRearCols"/>
+<parameter id="TupleTranPrevToRearRows"/>
+<parameter id="debug"/>
+<parameter id="path"/>
+<parameter id="pathloop"/>
 </parameters>
 </docu>
 </procedure>
 <procedure name="split_vessel_region">
 <interface>
 <io>
-<par name="RegionVesselUnion" base_type="iconic" dimension="0"/>
+<par name="RegionVesselConcat" base_type="iconic" dimension="0"/>
 </io>
 <oo>
-<par name="RegionsSplited" base_type="iconic" dimension="0"/>
+<par name="CenterLines" base_type="iconic" dimension="0"/>
+<par name="RegionVesselSplited" base_type="iconic" dimension="0"/>
+<par name="CenterLineContours" base_type="iconic" dimension="0"/>
 </oo>
+<ic>
+<par name="Width" base_type="ctrl" dimension="0"/>
+<par name="Height" base_type="ctrl" dimension="0"/>
+</ic>
+<oc>
+<par name="NumberCenterLines" base_type="ctrl" dimension="0"/>
+<par name="VesselDiameters" base_type="ctrl" dimension="0"/>
+<par name="VesselLengths" base_type="ctrl" dimension="0"/>
+</oc>
 </interface>
 <body>
-<c>* C++端令有一公开接口版本输入的图像 需要调用预处理函数pre_process</c>
-<l>* pre_process(Image, ImageGauss, RegionVesselUnion, path, Index, Width, Height)</l>
+<c>* 将所有流动轨迹组合起来</c>
+<l>* union1(RegionVesselConcat, RegionVesselConcat)</l>
 <c></c>
-<c>* 先做一次闭运算平滑轨迹边缘</c>
-<l>closing_circle(RegionVesselUnion, ClosingRegionVesselUnion, 3.5)</l>
+<c>* 使用组合流动轨迹的最大内切半径的1.5倍 计算流动轨迹的各中心线</c>
+<c>* 注：不用2倍是为了避免过大的内切直径 导致提取中心线时忽略了太多的小直径区域</c>
+<l>region_features(RegionVesselConcat, 'inner_radius', InnerRadiusRegionVesselConcat)</l>
 <c></c>
-<c>* 计算连续区域</c>
-<l>connection(ClosingRegionVesselUnion, RegionVesselConnection)</l>
-<c></c>
-<c>* 计算各个连续区域的像素面积</c>
-<l>area_center(RegionVesselConnection, AreaRegionVessel, useless, useless)</l>
-<c></c>
-<c>* 如果全部的连续区域都没有大于4000的 那就都不用分解 分解区域就等于连续区域</c>
-<l>tuple_max(AreaRegionVessel, MaxArea)</l>
-<l>if(MaxArea&lt;4000)</l>
-<l>    RegionsSplited := RegionVesselConnection</l>
-<l>    return()</l>
-<l>endif</l>
-<c></c>
-<c>* 连续像素大于4000px的(RegionVesselDoSplit)要进行分解</c>
-<l>select_shape(RegionVesselConnection, RegionVesselDoSplit, 'area', 'and', 4000, MaxArea)</l>
-<l>union1(RegionVesselDoSplit, UnionRegionVesselDoSplit)</l>
-<c></c>
-<c>* 小于等于4000(RegionVesselDoSplit)的直接归到已经分解好的(RegionsSplited)</c>
-<l>difference(RegionVesselConnection, RegionVesselDoSplit, RegionVesselDoNotSplit)</l>
-<l>gen_region_points(RegionsSplited, [], [])</l>
-<l>concat_obj(RegionsSplited, RegionVesselDoNotSplit, RegionsSplited)</l>
-<c></c>
-<c>* 求血管区域骨骼(Skeleton) 即中心线</c>
-<l>skeleton (UnionRegionVesselDoSplit, Skeleton)</l>
-<l>get_region_points(Skeleton, RowsSkeleton, ColumnsSkeleton)</l>
-<c></c>
-<c>* 需要分割的血管区域的外边界(BorderNeedSplitRegions)</c>
-<l>boundary (UnionRegionVesselDoSplit, BorderNeedSplitRegions, 'inner')</l>
-<c></c>
-<c>* 求出中心线到外边界的最小距离</c>
-<l>distance_pr(BorderNeedSplitRegions, RowsSkeleton, ColumnsSkeleton, DistanceMin, useless)</l>
-<c></c>
-<c>* 过滤掉最小距离中的0 沿中心线作若干个圆 得到的圆集合无限贴近于外边界</c>
-<l>tuple_find(DistanceMin, 0, IndicesZeros)</l>
-<l>tuple_remove(DistanceMin, IndicesZeros, Radius)</l>
-<l>tuple_remove(RowsSkeleton, IndicesZeros, RowsSkeleton)</l>
-<l>tuple_remove(ColumnsSkeleton, IndicesZeros, ColumnsSkeleton)</l>
-<l>gen_circle(Circles, RowsSkeleton, ColumnsSkeleton, Radius)</l>
-<c></c>
-<c>* 将中心线上的圆 根据半径每差2px归为一个半径等级 [0, 2]等级1 [2, 4]等级2 [4, 6]等级3... </c>
-<l>tuple_max(Radius, MaxRadius)</l>
-<l>RadiusSection:=0</l>
-<l>while(RadiusSection&lt;MaxRadius)</l>
-<l>    select_shape(Circles, CirclesWidthSection, 'inner_radius', 'and', RadiusSection, RadiusSection+2)</l>
+<l>gen_image_const(ImageRegionVesselConcat, 'byte', Width, Height)</l>
+<l>overpaint_region(ImageRegionVesselConcat, RegionVesselConcat, 255, 'fill') </l>
 <c>    </c>
-<l>    union1(CirclesWidthSection, Section)</l>
-<l>    if(RadiusSection&gt;1)</l>
-<l>        concat_obj(CircleSections, Section, CircleSections)</l>
+<l>calculate_lines_gauss_parameters(InnerRadiusRegionVesselConcat*1.5, 255, Sigma, Low, High)</l>
+<l>lines_gauss(ImageRegionVesselConcat, RawCenterLines, Sigma, Low, High, 'light', 'true', 'parabolic', 'true')</l>
+<c></c>
+<c>* 选择长度100及以下的进行合并 大于100的不合并</c>
+<l>NeedUnionContoursCount:=0</l>
+<l>NoNeedUnionContoursCount:=0</l>
+<l>length_xld(RawCenterLines, LengthRawCenterLines)</l>
+<l>for I:=1 to |LengthRawCenterLines| by 1</l>
+<l>    select_obj(RawCenterLines, RawCenterLine, I)</l>
+<l>    if(LengthRawCenterLines[I-1]&lt;=100)</l>
+<l>        if(NeedUnionContoursCount)</l>
+<l>            concat_obj(NeedUnionContours, RawCenterLine, NeedUnionContours)</l>
+<l>        else</l>
+<l>            NeedUnionContours:=RawCenterLine</l>
+<l>        endif</l>
+<l>        NeedUnionContoursCount:=NeedUnionContoursCount+1</l>
 <l>    else</l>
-<l>        union1(Section, CircleSections)</l>
+<l>        if(NoNeedUnionContoursCount)</l>
+<l>            concat_obj(NoNeedUnionContours, RawCenterLine, NoNeedUnionContours)</l>
+<l>        else</l>
+<l>            NoNeedUnionContours:=RawCenterLine</l>
+<l>        endif</l>
+<l>        NoNeedUnionContoursCount:=NoNeedUnionContoursCount+1</l>
+<l>    endif</l>
+<l>endfor</l>
+<c></c>
+<c>* 合并共线轮廓</c>
+<c>* 参数解析详见 https://blog.csdn.net/qq_18620653/article/details/105518295</c>
+<l>union_collinear_contours_xld(NeedUnionContours, RawCenterLinesCollinear, 1, 0.2, 15,  rad(15), 'attr_keep')</l>
+<c></c>
+<c>* 合并端点曲率轮廓</c>
+<c>* 参数解析详见 https://www.gkbc8.com/thread-13729-1-1.html</c>
+<l>try</l>
+<l>    union_cotangential_contours_xld(RawCenterLinesCollinear, RawCenterLinesCotangential, 0, 'auto', rad(15), 20, 20, 10, 'attr_keep')</l>
+<l>catch (Exception)</l>
+<l>    RawCenterLinesCotangential:=RawCenterLinesCollinear</l>
+<l>endtry</l>
+<c></c>
+<c>* 合并完的和不用合并的组合回来</c>
+<l>concat_obj(NoNeedUnionContours, RawCenterLinesCotangential, RawUnionCenterLines)</l>
+<c></c>
+<c>* 界内中心线计数</c>
+<l>NumberCenterLines:=0</l>
+<c></c>
+<c>* 血管直径/长度</c>
+<l>VesselDiameters:=[]</l>
+<l>VesselLengths:=[]</l>
+<c></c>
+<l>gen_empty_obj(CenterLines)</l>
+<l>gen_empty_obj(CenterLineContours)</l>
+<l>gen_empty_obj(RegionCenterLineContours)</l>
+<c></c>
+<c>* 遍历中心线 </c>
+<c>* 1、过滤界外中心线</c>
+<c>* 2、生成开放的左右区域 用显示</c>
+<c>* 3、生成封闭的血管区域 用来计算区域流速</c>
+<l>count_obj(RawUnionCenterLines, NumberRawCenterLines)</l>
+<l>for I:=1 to NumberRawCenterLines by 1</l>
+<l>    select_obj(RawUnionCenterLines, RawCenterLine, I)</l>
+<c>    </c>
+<c>    * 获取中心线的坐标</c>
+<l>    get_contour_xld(RawCenterLine, RowRawCenterLine, ColRawCenterLine)</l>
+<c>    </c>
+<c>    * 获取中心线的左右宽度</c>
+<l>    get_contour_attrib_xld(RawCenterLine, 'width_left', WidthLeftRawCenterLine)</l>
+<l>    get_contour_attrib_xld(RawCenterLine, 'width_right', WidthRightRawCenterLine)</l>
+<c>    </c>
+<c>    * 计算左右宽度平均值 然后以平均值作为中心线的左右宽度</c>
+<c>    * 注：计算平均值是为了生成平滑的左右轮廓 使用原始的宽度生成的轮廓会比较不理想</c>
+<l>    tuple_mean(WidthLeftRawCenterLine, MeanWidthLeftRawCenterLine)</l>
+<l>    tuple_mean(WidthRightRawCenterLine, MeanWidthRightRawCenterLine)</l>
+<c>    </c>
+<c>    * 防抖之后的流动轨迹 对比原轨迹 有很大可能会被膨胀 参考lines_gauss例程乘上sqrt(0.75)消除膨胀</c>
+<l>    MeanWidthLeftRawCenterLine:=MeanWidthLeftRawCenterLine*sqrt(0.75)</l>
+<l>    MeanWidthRightRawCenterLine:=MeanWidthRightRawCenterLine*sqrt(0.75)</l>
+<c>    </c>
+<c>    * 如果左右宽度平均值为0的中心线 过滤掉</c>
+<l>    if(MeanWidthLeftRawCenterLine&lt;=0 or MeanWidthRightRawCenterLine&lt;=0)</l>
+<l>        continue</l>
 <l>    endif</l>
 <c>    </c>
-<l>    RadiusSection:=RadiusSection+2</l>
-<l>endwhile</l>
+<c>    * 生成宽度平均值数组</c>
+<l>    tuple_gen_const(|WidthLeftRawCenterLine|, MeanWidthLeftRawCenterLine, TupleMeanWidthLeftRawCenterLine)</l>
+<l>    tuple_gen_const(|WidthRightRawCenterLine|, MeanWidthRightRawCenterLine, TupleMeanWidthRightRawCenterLine)</l>
+<c>    </c>
+<c>    * 获取中心线的角度</c>
+<l>    get_contour_attrib_xld(RawCenterLine, 'angle', AngleRawCenterLine)</l>
 <c></c>
-<c>* 通过观察推测出 如果邻近的半径等级出现跨级 比如等级6与等级4之间为等级2 可以认为这个等级2的区域需要被断开 最终得到3个等级分别为6 2 4的[独立区域]</c>
-<c>* 但如果等级2出现在等级3与等级1之间 则可以认为这个等级2可以被保留 最终得到1个等级为3的[合并区域]</c>
-<c>* 因此需要从高等级往低等级进行匹配</c>
-<l>count_obj(CircleSections, Number)</l>
-<l>for I:=Number to 2 by -1</l>
-<c>    * 选择一个高等级</c>
-<l>    select_obj(CircleSections, CircleSectionBig, I)</l>
+<c>    * 计算中心线左右轮廓的坐标</c>
+<c>    * 关于sqrt(0.75)的解释 详见 https://blog.csdn.net/y363703390/article/details/85416327</c>
+<c>    * 为了显示线宽，只有线和背景在该点的灰度差达到25%才会显示，</c>
+<c>    * 该点是通过抛物线乘以sqrt(3/4)给出</c>
+<l>    RowL := RowRawCenterLine - cos(AngleRawCenterLine) * TupleMeanWidthLeftRawCenterLine * sqrt(0.75)</l>
+<l>    ColL := ColRawCenterLine - sin(AngleRawCenterLine) * TupleMeanWidthLeftRawCenterLine * sqrt(0.75)</l>
+<l>    RowR := RowRawCenterLine + cos(AngleRawCenterLine) * TupleMeanWidthRightRawCenterLine * sqrt(0.75)</l>
+<l>    ColR := ColRawCenterLine + sin(AngleRawCenterLine) * TupleMeanWidthRightRawCenterLine * sqrt(0.75)</l>
 <c>    </c>
-<c>    * 如果这个等级不是最高的 需要看看之前是否已经被合并了一部分 </c>
-<c>    * 比如6个等级中的第5级 在匹配第4级之前 需要先把已经被第6级匹配过的部分过滤掉 避免重复匹配造成分割区域重叠</c>
-<l>    if(I&lt;Number)</l>
-<l>        difference(CircleSectionBig, RegionsSplited, RegionConcatBig)</l>
-<l>    else</l>
-<l>        RegionConcatBig:=CircleSectionBig</l>
-<l>    endif</l>
+<c>    * 过滤掉坐标中的负值 确保左右轮廓都在图像界内</c>
+<l>    RealRowL:=[]</l>
+<l>    RealColL:=[]</l>
+<l>    RealRowR:=[]</l>
+<l>    RealColR:=[]</l>
 <c>    </c>
-<l>    dev_clear_window()</l>
-<l>    dev_display(RegionConcatBig)</l>
-<c>    </c>
-<l>    for J:=I-1 to 1 by -1</l>
-<c>        * 选择一个低等级</c>
-<l>        select_obj(CircleSections, CircleSectionSmall, J)</l>
-<c>        </c>
-<c>        * 低等级也需要过滤掉已经被合并的部分</c>
-<c>        * 比如第6级在匹配第5级时 第4级已经被合并了一部分 那么第5级在匹配第4级时 也需要过滤掉这些部分</c>
-<c>        * 注意：脑子不要套娃了！</c>
-<l>        difference(CircleSectionSmall, RegionsSplited, RegionConcatSmall)</l>
-<c>        </c>
-<c>        * 检测与高等级的连接部分</c>
-<l>        concat_obj(RegionConcatSmall, RegionConcatBig, ObjectsConcat1)</l>
-<l>        union1(ObjectsConcat1, RegionUnion1)</l>
-<l>        connection(RegionUnion1, ConnectedRegions3)</l>
-<c>        </c>
-<c>        * 如果和高等级连接成功 那么等级就会自然变成高等级</c>
-<l>        select_shape(ConnectedRegions3, RegionConcatBig, 'inner_radius', 'and', 2*(I-1), 2*I)</l>
-<c>        </c>
-<l>        dev_clear_window()</l>
-<l>        dev_display(RegionConcatBig)</l>
+<l>    for K:=0 to |RowL|-1 by 1</l>
+<l>        if(RowL[K]&gt;0 and ColL[K]&gt;0)</l>
+<l>            RealRowL:=[RealRowL, RowL[K]]</l>
+<l>            RealColL:=[RealColL, ColL[K]]</l>
+<l>        endif</l>
 <l>    endfor</l>
 <c>    </c>
-<l>    concat_obj(RegionsSplited, RegionConcatBig, RegionsSplited)</l>
+<l>    for K:=0 to |RowR|-1 by 1</l>
+<l>        if(RowR[K]&gt;0 and ColR[K]&gt;0)</l>
+<l>            RealRowR:=[RealRowR, RowR[K]]</l>
+<l>            RealColR:=[RealColR, ColR[K]]</l>
+<l>        endif</l>
+<l>    endfor</l>
+<c>    </c>
+<c>    * 如果中心线整体都在界外 过滤掉</c>
+<l>    if(|RealRowL|==0 or |RealColL|==0 or |RealRowR|==0 or |RealColR|==0)</l>
+<l>        continue</l>
+<l>    endif</l>
+<c>    </c>
+<c>    * 记录直径</c>
+<l>    VesselDiameters:=[VesselDiameters, MeanWidthLeftRawCenterLine+MeanWidthRightRawCenterLine]</l>
+<c>    </c>
+<c>    * 生成左右轮廓</c>
+<l>    gen_contour_polygon_xld(RealContourLeft, RealRowL, RealColL)</l>
+<l>    gen_contour_polygon_xld(RealContourRight, RealRowR, RealColR)</l>
+<c>    </c>
+<c>    * 生成左右轮廓区域</c>
+<l>    gen_region_polygon(RegionCenterLineLeft, RealRowL, RealColL)</l>
+<l>    gen_region_polygon(RegionCenterLineRight, RealRowR, RealColR)</l>
+<c>    </c>
+<c>    * 封闭左右轮廓区域 封闭失败的中心线过滤掉</c>
+<l>    try</l>
+<l>        gen_region_line(LineRegionCenterLineHead, RealRowL[0], RealColL[0], RealRowR[0], RealColR[0])</l>
+<l>        gen_region_line(LineRegionCenterLineTail, RealRowL[|RealRowL|-1], RealColL[|RealColL|-1], RealRowR[|RealRowR|-1], RealColR[|RealColR|-1])</l>
+<l>    catch (Exception)</l>
+<l>        continue</l>
+<l>    endtry</l>
+<c>    </c>
+<l>    union2(RegionCenterLineLeft, RegionCenterLineRight, RegionCenterLineContourBody)</l>
+<l>    union2(LineRegionCenterLineHead, LineRegionCenterLineTail, RegionCenterLineContourConnect)</l>
+<l>    union2(RegionCenterLineContourBody, RegionCenterLineContourConnect, RegionCenterLineContour)</l>
+<c>    </c>
+<c>    * 收集 界内中心线/左右轮廓/封闭区域</c>
+<l>    concat_obj(CenterLines, RawCenterLine, CenterLines)</l>
+<c>        </c>
+<l>    concat_obj(CenterLineContours, RealContourLeft, CenterLineContours)</l>
+<l>    concat_obj(CenterLineContours, RealContourRight, CenterLineContours)</l>
+<c>    </c>
+<l>    concat_obj(RegionCenterLineContours, RegionCenterLineContour, RegionCenterLineContours)</l>
+<c>    </c>
+<l>    NumberCenterLines:=NumberCenterLines+1</l>
 <l>endfor</l>
+<c></c>
+<c>* 记录长度</c>
+<l>length_xld(CenterLines, VesselLengths)</l>
+<c></c>
+<c>* 填充封闭区域 生成计算流速用的血管区域</c>
+<l>fill_up(RegionCenterLineContours, FillupCenterLineContours)</l>
+<l>closing_circle(FillupCenterLineContours, ClosingCenterLineContours, InnerRadiusRegionVesselConcat)</l>
+<l>intersection(ClosingCenterLineContours, RegionVesselConcat, RegionVesselSplited)</l>
 <c></c>
 <l>return ()</l>
 </body>
 <docu id="split_vessel_region">
 <parameters>
-<parameter id="RegionVesselUnion"/>
-<parameter id="RegionsSplited"/>
+<parameter id="CenterLineContours"/>
+<parameter id="CenterLines"/>
+<parameter id="Height"/>
+<parameter id="NumberCenterLines"/>
+<parameter id="RegionVesselConcat"/>
+<parameter id="RegionVesselSplited"/>
+<parameter id="VesselDiameters"/>
+<parameter id="VesselLengths"/>
+<parameter id="Width"/>
 </parameters>
 </docu>
 </procedure>
-<procedure name="is_sharp">
+<procedure name="align_antishake_region">
 <interface>
+<io>
+<par name="RegionOrigin" base_type="iconic" dimension="0"/>
+</io>
+<oo>
+<par name="RegionAntishaked" base_type="iconic" dimension="0"/>
+</oo>
 <ic>
-<par name="Sharpness" base_type="ctrl" dimension="0"/>
+<par name="BeginFrame" base_type="ctrl" dimension="0"/>
+<par name="EndFrame" base_type="ctrl" dimension="0"/>
+<par name="TupleTranPrevToRearRows" base_type="ctrl" dimension="0"/>
+<par name="TupleTranPrevToRearCols" base_type="ctrl" dimension="0"/>
+<par name="Type" base_type="ctrl" dimension="0"/>
 </ic>
-<oc>
-<par name="isSharp" base_type="ctrl" dimension="0"/>
-</oc>
 </interface>
 <body>
-<l>if(Sharpness &gt;= 0.91 and Sharpness &lt; 1.195)</l>
-<l>    isSharp := true</l>
-<l>else</l>
-<l>    isSharp := false</l>
+<c>* 将RegionOrigin中BeginFrame至EndFrame的血管区域对齐到BeginFrame</c>
+<c></c>
+<l>count_obj(RegionOrigin, CountRegionOrigin)</l>
+<l>if(CountRegionOrigin &lt;= (EndFrame - BeginFrame))</l>
+<l>    EndFrame:=BeginFrame+CountRegionOrigin-1</l>
+<l>endif</l>
+<c></c>
+<l>if(Type=='region')</l>
+<l>    select_obj (RegionOrigin, RegionAntishaked, BeginFrame)</l>
+<c>    </c>
+<c>    * 防抖后的合并掩膜</c>
+<l>    region_features(RegionAntishaked, 'width', Width)</l>
+<l>    region_features(RegionAntishaked, 'height', Height)</l>
+<l>    gen_rectangle1(RegionAntiShakeMergeMask, 0, 0, Height, Width)</l>
+<c>    </c>
+<l>    for I := BeginFrame+1 to EndFrame by 1</l>
+<l>        vector_angle_to_rigid (0, 0, 0, -TupleTranPrevToRearRows[I-2], -TupleTranPrevToRearCols[I-2], 0, HomMat2DRearToPrev)</l>
+<l>        affine_trans_region(RegionOrigin, RegionOrigin, HomMat2DRearToPrev, 'nearest_neighbor')</l>
+<l>        affine_trans_region(RegionAntiShakeMergeMask, RegionAntiShakeMergeMask, HomMat2DRearToPrev, 'nearest_neighbor')</l>
+<l>        select_obj(RegionOrigin, RegionSelected, I)</l>
+<l>        concat_obj(RegionAntishaked, RegionSelected, RegionAntishaked)</l>
+<l>    endfor</l>
+<c>    </c>
+<l>    intersection(RegionAntishaked, RegionAntiShakeMergeMask, RegionAntishaked)</l>
+<l>elseif(Type=='image')</l>
+<l>    select_obj (RegionOrigin, RegionAntishaked, BeginFrame)</l>
+<l>    for I := BeginFrame+1 to EndFrame by 1</l>
+<l>        vector_angle_to_rigid (0, 0, 0, -TupleTranPrevToRearRows[I-2], -TupleTranPrevToRearCols[I-2], 0, HomMat2DRearToPrev)</l>
+<l>        affine_trans_image(RegionOrigin, RegionOrigin, HomMat2DRearToPrev, 'nearest_neighbor', 'false')</l>
+<l>        select_obj(RegionOrigin, RegionSelected, I)</l>
+<l>        concat_obj(RegionAntishaked, RegionSelected, RegionAntishaked)</l>
+<l>    endfor    </l>
 <l>endif</l>
 <c></c>
 <l>return ()</l>
 </body>
-<docu id="is_sharp">
+<docu id="align_antishake_region">
 <parameters>
-<parameter id="Sharpness"/>
-<parameter id="isSharp"/>
+<parameter id="BeginFrame"/>
+<parameter id="EndFrame"/>
+<parameter id="RegionAntishaked"/>
+<parameter id="RegionOrigin"/>
+<parameter id="TupleTranPrevToRearCols"/>
+<parameter id="TupleTranPrevToRearRows"/>
+<parameter id="Type"/>
+</parameters>
+</docu>
+</procedure>
+<procedure name="calculate_glycocalyx">
+<interface>
+<io>
+<par name="CenterLines" base_type="iconic" dimension="0"/>
+<par name="RegionVesselConcat" base_type="iconic" dimension="0"/>
+</io>
+<ic>
+<par name="NumberCenterLines" base_type="ctrl" dimension="0"/>
+<par name="TupleTranPrevToRearRows" base_type="ctrl" dimension="0"/>
+<par name="TupleTranPrevToRearCols" base_type="ctrl" dimension="0"/>
+<par name="Pixelsize" base_type="ctrl" dimension="0"/>
+<par name="Magnification" base_type="ctrl" dimension="0"/>
+</ic>
+<oc>
+<par name="glycocalyx" base_type="ctrl" dimension="0"/>
+</oc>
+</interface>
+<body>
+<c>* @brief  XJ是我选择的有用的血管  X0是单个血管点的 X0Mean 是单条血管的</c>
+<c>* @author yzt</c>
+<c>* @date   2022/05/25</c>
+<l>XJ:=[]</l>
+<l>glycocalyx:=[]</l>
+<l>Rows:=[]</l>
+<l>Cols:=[]</l>
+<l>Nums:=[]</l>
+<c></c>
+<c>*********************************************画测量线、计算有效血管点begin********************************************        </c>
+<l>gen_empty_obj(VesselLines)</l>
+<l>for J := 1 to NumberCenterLines by 1</l>
+<l>    glycocalyx:=[glycocalyx, -1]</l>
+<c>    </c>
+<c>    * 获取单条血管</c>
+<l>    select_obj(CenterLines, CenterLine, J)</l>
+<c>       </c>
+<c>    * 获取单条血管的位置/角度/</c>
+<l>    get_contour_xld(CenterLine, Row, Col)</l>
+<c>     </c>
+<l>    get_contour_attrib_xld(CenterLine, 'angle', Attrib)</l>
+<l>    gen_empty_obj(VesselLine)</l>
+<c>    </c>
+<l>    get_contour_attrib_xld(CenterLine, 'width_right', WidthR)   </l>
+<l>    get_contour_attrib_xld(CenterLine, 'width_left', WidthL)</l>
+<c>    </c>
+<l>    Diameter := (WidthL + WidthR) * sqrt(0.75)</l>
+<l>    Diam := sum(Diameter) / |Diameter|</l>
+<c>    </c>
+<l>    if(Diam &gt;= 5 and Diam &lt;= 30 and |Row| &gt; 100)</l>
+<c>        * 记录下J</c>
+<l>        XJ:=[XJ, J-1]</l>
+<c>        * 画测量线</c>
+<l>        for K:=10 to |Row|-10 by 10</l>
+<l>            gen_region_line(line,Row[K]-16, Col[K], Row[K]+16, Col[K])</l>
+<l>            vector_angle_to_rigid(Row[K], Col[K], 0, Row[K], Col[K], Attrib[K], HomMat2DLine)</l>
+<l>            affine_trans_region(line, PreLine, HomMat2DLine, 'nearest_neighbor')</l>
+<l>            concat_obj(VesselLine, PreLine, VesselLine)</l>
+<l>        endfor </l>
+<c>        *</c>
+<c>        * 存储待测量血管点数量, 这里统计每一条血管的血管点数，方便后续计算单条血管的糖萼值。</c>
+<l>        count_obj(VesselLine, VesselPointNum) </l>
+<l>        concat_obj(VesselLines, VesselLine, VesselLines)   </l>
+<l>        Nums:=[Nums, VesselPointNum]</l>
+<c>    </c>
+<l>        Rows:=[Rows,Row[|Row|/2]]</l>
+<l>        Cols:=[Cols,Col[|Col|/2]]</l>
+<l>    else</l>
+<l>        continue</l>
+<c>        </c>
+<l>    endif</l>
+<l>endfor</l>
+<c></c>
+<l>if(|Nums|==0)</l>
+<l>    return()</l>
+<l>endif</l>
+<c>*************************************************画测量线、计算有效血管点end*********************************************</c>
+<c>    </c>
+<c>************************************************获取血管点在所有帧的宽度begin*********************************************</c>
+<l>Areas:=[]  //存储相交面积</l>
+<c></c>
+<l>count:=1</l>
+<c></c>
+<l>align_antishake_region (RegionVesselConcat, RegionAlignVesselConcat, 1, |TupleTranPrevToRearRows|, TupleTranPrevToRearRows, TupleTranPrevToRearCols, 'region')</l>
+<c></c>
+<l>for I:=11 to |TupleTranPrevToRearRows| by 1</l>
+<l>    select_obj(RegionAlignVesselConcat, RegionAlignVessel, I)</l>
+<c>    </c>
+<l>    count:=count+1</l>
+<l>    intersection(VesselLines, RegionAlignVessel, VessellLineIntersection)</l>
+<l>    area_center(VessellLineIntersection, Area, useless, useless)</l>
+<c>    </c>
+<l>    Areas:=[Areas,Area]</l>
+<l>endfor</l>
+<c>**********************************************获取血管点在所有帧的宽度end************************************************</c>
+<c></c>
+<c>* 求取糖萼的纵坐标范围</c>
+<l>tangeX:=int(count*0.25)</l>
+<l>tangeY:=int(count*0.75)</l>
+<c>          </c>
+<c>* 少于20帧影响数据精确</c>
+<l>if(count &lt;= 20)</l>
+<l>    return()</l>
+<l>endif</l>
+<c>              </c>
+<c>********************************************糖萼计算begin***************************************   </c>
+<l>Start:=0</l>
+<l>End:=Nums[0]-1</l>
+<l>count_obj(VesselLines, AllPointsNum)</l>
+<c></c>
+<l>for Num:=0 to |Nums|-1 by 1</l>
+<l>    X0:=[]</l>
+<l>    for I := Start to End by 1     </l>
+<c>            </c>
+<l>        tange:=[]  </l>
+<c>        </c>
+<c>        *取该血管上单个血管点的宽度值</c>
+<l>        for J:= I to |Areas|-1 by AllPointsNum </l>
+<l>            tange:=[tange, Areas[J]]</l>
+<l>        endfor</l>
+<c>        </c>
+<l>        tuple_sort(tange, tangeSorted)</l>
+<l>        tuple_inverse(tangeSorted, tangeInverted)    </l>
+<c>                    </c>
+<l>        tuple_select_range(tangeInverted, tangeX, tangeY, tangeRange)            </l>
+<c>        </c>
+<l>        if(tangeRange[0] == tangeRange[|tangeRange|-1])</l>
+<l>            X0:=[X0 , 0]</l>
+<l>            continue</l>
+<l>        endif</l>
+<c>        </c>
+<c>        *中位数</c>
+<l>        tuple_median(tangeInverted, Median)</l>
+<c>        </c>
+<l>        Range:=[] </l>
+<l>        l:=[]</l>
+<l>        for Index:= tangeX to tangeY by 1</l>
+<l>            Range:=[Range, Index]  </l>
+<l>            l:=[l, 1]</l>
+<l>        endfor</l>
+<c>            </c>
+<l>        tangeRange:=[tangeRange, l]</l>
+<c>        </c>
+<c>        ******************接下来用矩阵进行最小二乘求解. y = ax + b (start)*******************</c>
+<c>        * XT 代表X的转置 inv(*)代表*的逆</c>
+<c>        * x beta = y</c>
+<c>        * xT x beta = xT y</c>
+<c>        * beta = inv( xT*x)*xT*y,求得beta的值，values矩阵里的值为[a,b]，即可取得线性回归方程</c>
+<c>        </c>
+<c>        * 创建矩阵</c>
+<c>        * Y轴</c>
+<l>        create_matrix(1, |Range|, Range, y)</l>
+<l>        create_matrix(2, |Range|, tangeRange, x)</l>
+<c>        </c>
+<c>        * 矩阵相乘</c>
+<c>        * 这里需要注意矩阵相乘的前后顺序，否则会出错；例如：【2*2】与【2*1】相乘时得到的矩阵为【2*1】，无法前后调换。</c>
+<l>        mult_matrix(x, x, 'ABT', xtx)</l>
+<l>        mult_matrix(y, x, 'ABT', xty)</l>
+<c>        </c>
+<c>        * 逆矩阵</c>
+<l>        invert_matrix(xtx, 'general', 0.0, invxtx)</l>
+<c>        </c>
+<l>        mult_matrix(xty, invxtx, 'AB', beta)</l>
+<l>        get_full_matrix(beta, Values)</l>
+<c>        </c>
+<l>        Value:= (Values[1]/ abs(Values[0]-Median))/2</l>
+<c>        </c>
+<c>        *X0 代表 线性回归方程与X轴的交点。</c>
+<l>        X0 := [X0, Value]     </l>
+<c>        ********************************用矩阵进行最小二乘求解(end)*****************************     </c>
+<l>    endfor</l>
+<c>    </c>
+<l>    Start:= Start+Nums[Num]</l>
+<l>    End:=Start+Nums[Num]-1</l>
+<c>    </c>
+<l>    tuple_find(X0, 0,Indices)</l>
+<l>    tuple_remove(X0,Indices, X0)</l>
+<l>    if(|X0| == 0)</l>
+<c>        </c>
+<l>         glycocalyx:=[glycocalyx,0]</l>
+<l>         continue </l>
+<l>    else</l>
+<l>        tuple_mean(X0,X0Mean)</l>
+<c>    </c>
+<l>        glycocalyx[XJ[Num]]:= X0Mean*Pixelsize/Magnification</l>
+<l>    endif</l>
+<l>endfor</l>
+<c></c>
+<l>return ()</l>
+</body>
+<docu id="calculate_glycocalyx">
+<parameters>
+<parameter id="CenterLines"/>
+<parameter id="Magnification"/>
+<parameter id="NumberCenterLines"/>
+<parameter id="Pixelsize"/>
+<parameter id="RegionVesselConcat"/>
+<parameter id="TupleTranPrevToRearCols"/>
+<parameter id="TupleTranPrevToRearRows"/>
+<parameter id="glycocalyx"/>
+</parameters>
+</docu>
+</procedure>
+<procedure name="calculate_flowrate">
+<interface>
+<io>
+<par name="ImageGaussConcat" base_type="iconic" dimension="0"/>
+<par name="RegionVesselSplited" base_type="iconic" dimension="0"/>
+</io>
+<ic>
+<par name="NumberCenterLines" base_type="ctrl" dimension="0"/>
+<par name="TupleProcessImageIndex" base_type="ctrl" dimension="0"/>
+<par name="TupleTranPrevToRearRows" base_type="ctrl" dimension="0"/>
+<par name="TupleTranPrevToRearCols" base_type="ctrl" dimension="0"/>
+<par name="Pixelsize" base_type="ctrl" dimension="0"/>
+<par name="Magnification" base_type="ctrl" dimension="0"/>
+<par name="Fps" base_type="ctrl" dimension="0"/>
+</ic>
+<oc>
+<par name="Flowrate" base_type="ctrl" dimension="0"/>
+</oc>
+</interface>
+<body>
+<c>* 将血管图像移动回跟首帧重叠</c>
+<l>align_antishake_region (ImageGaussConcat, ImageGaussAlignConcat, 1, 26, TupleTranPrevToRearRows, TupleTranPrevToRearCols, 'image')</l>
+<c></c>
+<c>* ////////////////////////////////////////////////////////////////////////////////// *</c>
+<c>* </c>
+<c>* @note</c>
+<c>* 红细胞流速(um/s) = 流动轨迹距离 / 前后帧时间差(s) * 像素尺寸(um/px) / 放大倍率</c>
+<c>*</c>
+<c>* 令血管骨架长度为血管总长度 则可认为血管总长度为血管内可流动的最大距离</c>
+<c>* 可推算 流动轨迹距离 = 血管骨架上的流动面积</c>
+<c>*</c>
+<c>* 除以两帧之间的时间差 等价于帧率相乘代替</c>
+<c>*</c>
+<c>* 即 红细胞流速(um/s) = 血管骨架上的流动面积 * 帧率 * 像素尺寸(um/px) / 放大倍率</c>
+<c>* </c>
+<c>* ////////////////////////////////////////////////////////////////////////////////// *</c>
+<l>skeleton(RegionVesselSplited, SkeletonRegionVesselSplited)</l>
+<l>union1(SkeletonRegionVesselSplited, UnionSkeletonRegionVesselSplited)</l>
+<c></c>
+<l>count_obj(ImageGaussAlignConcat, NumberImageAlgoithmCommonConcat)</l>
+<l>if(NumberImageAlgoithmCommonConcat&gt;25)</l>
+<l>    NumberImageAlgoithmCommonConcat:=25</l>
+<l>else</l>
+<l>    NumberImageAlgoithmCommonConcat:=NumberImageAlgoithmCommonConcat-1</l>
+<l>endif</l>
+<c></c>
+<c>* 流动面积总和 流动面积有效计数</c>
+<l>tuple_gen_const(NumberCenterLines, 0, TrackAreas)</l>
+<l>tuple_gen_const(NumberCenterLines, 0, TrackAreasCount)</l>
+<c></c>
+<l>for I:=1 to NumberImageAlgoithmCommonConcat by 1</l>
+<l>    select_obj(ImageGaussAlignConcat, ImageAlgoithmCommonPrev, I)</l>
+<l>    select_obj(ImageGaussAlignConcat, ImageAlgoithmCommonRear, I+1)</l>
+<c>    </c>
+<c>    * 计算流动轨迹</c>
+<c>    * 注：用前后帧防抖后的共同区域 而非之前的合并区域进行计算 避免防抖造成的数据误差</c>
+<c>    * 注2：红细胞体现为低灰度 因此需要将图片反色 相减后得出的才是后帧的红细胞</c>
+<l>    reduce_domain(ImageAlgoithmCommonPrev, UnionSkeletonRegionVesselSplited, ImageVesselPrev)</l>
+<l>    reduce_domain(ImageAlgoithmCommonRear, UnionSkeletonRegionVesselSplited, ImageVesselRear)</l>
+<c>    </c>
+<l>    invert_image(ImageVesselPrev, ImageVesselPrevInvert)</l>
+<l>    invert_image(ImageVesselRear, ImageVesselRearInvert)</l>
+<c>    </c>
+<l>    sub_image(ImageVesselRear, ImageVesselPrev, ImageFlowMotion, 1, 0)    </l>
+<l>    mean_image(ImageFlowMotion, ImageFlowMotionMean, 23, 23)</l>
+<l>    dyn_threshold(ImageFlowMotion, ImageFlowMotionMean, UnionRegionFlowMotion, 5, 'light')</l>
+<c>    </c>
+<l>    intersection(SkeletonRegionVesselSplited, UnionRegionFlowMotion, RegionFlowMotion)</l>
+<c>    </c>
+<l>    area_center(RegionFlowMotion, TrackArea, useless, useless)</l>
+<l>    if(|TrackArea|)</l>
+<l>        TrackAreas:=TrackAreas+TrackArea</l>
+<c>        </c>
+<c>        * 计算流速所用的帧数 需要考虑由于不清晰造成的跳帧</c>
+<l>        if(I&gt;1)</l>
+<l>            tuple_gen_const(|TrackArea|, TupleProcessImageIndex[I-1]-TupleProcessImageIndex[I-2], TrackAreasCountPlus)</l>
+<l>        else</l>
+<l>            tuple_gen_const(|TrackArea|, TupleProcessImageIndex[0], TrackAreasCountPlus)</l>
+<l>        endif</l>
+<c>        </c>
+<l>        tuple_find(TrackArea, 0, ZeroIndices)</l>
+<l>        if(|ZeroIndices| and ZeroIndices!=-1)</l>
+<l>            tuple_replace(TrackAreasCountPlus, ZeroIndices, 0, TrackAreasCountPlus)</l>
+<l>        endif</l>
+<l>        TrackAreasCount:=TrackAreasCount+TrackAreasCountPlus</l>
+<l>    endif</l>
+<l>endfor</l>
+<c></c>
+<l>tuple_find(TrackAreasCount, 0, ZeroIndices)</l>
+<l>if(|ZeroIndices| and ZeroIndices!=-1)</l>
+<l>    tuple_replace(TrackAreasCount, ZeroIndices, 1, TrackAreasCount)</l>
+<l>endif</l>
+<c></c>
+<c>* 计算流速 公式见上 此处以大恒相机为例</c>
+<l>MeanTrackArea:=real(TrackAreas) / real(TrackAreasCount)</l>
+<l>Flowrate:=MeanTrackArea * Fps * Pixelsize / Magnification</l>
+<c></c>
+<l>return ()</l>
+</body>
+<docu id="calculate_flowrate">
+<parameters>
+<parameter id="Flowrate"/>
+<parameter id="Fps"/>
+<parameter id="ImageGaussConcat"/>
+<parameter id="Magnification"/>
+<parameter id="NumberCenterLines"/>
+<parameter id="Pixelsize"/>
+<parameter id="RegionVesselSplited"/>
+<parameter id="TupleProcessImageIndex"/>
+<parameter id="TupleTranPrevToRearCols"/>
+<parameter id="TupleTranPrevToRearRows"/>
+</parameters>
+</docu>
+</procedure>
+<procedure name="read_imagelist">
+<interface>
+<oo>
+<par name="ImageList" base_type="iconic" dimension="0"/>
+</oo>
+<ic>
+<par name="path" base_type="ctrl" dimension="0"/>
+</ic>
+<oc>
+<par name="Width" base_type="ctrl" dimension="0"/>
+<par name="Height" base_type="ctrl" dimension="0"/>
+<par name="Success" base_type="ctrl" dimension="0"/>
+</oc>
+</interface>
+<body>
+<l>gen_empty_obj(ImageList)</l>
+<c></c>
+<l>try</l>
+<l>    list_files(path, 'files', ImagePathList)</l>
+<c>    </c>
+<l>    if(|ImagePathList|&gt;=100)</l>
+<l>        EndIndex:=98</l>
+<l>    else</l>
+<l>        EndIndex:=|ImagePathList|-2</l>
+<l>    endif</l>
+<c>    </c>
+<l>    for I:=1 to EndIndex by 1</l>
+<l>        read_image(Image, path + I)</l>
+<l>        get_image_size(Image, Width, Height)</l>
+<l>        count_channels(Image, Channels)</l>
+<l>        if(Channels&gt;=3)</l>
+<l>            rgb1_to_gray(Image, Image)</l>
+<l>        endif</l>
+<c>    </c>
+<l>        concat_obj(ImageList, Image, ImageList)</l>
+<l>    endfor</l>
+<l>    Success:=true</l>
+<l>catch (Exception)</l>
+<l>    Success:=false</l>
+<l>    return()</l>
+<l>endtry</l>
+<c></c>
+<l>return ()</l>
+</body>
+<docu id="read_imagelist">
+<parameters>
+<parameter id="Height"/>
+<parameter id="ImageList"/>
+<parameter id="Success"/>
+<parameter id="Width"/>
+<parameter id="path"/>
 </parameters>
 </docu>
 </procedure>

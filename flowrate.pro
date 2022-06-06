@@ -26,25 +26,40 @@ INCLUDEPATH += \
     $$PWD/libs/opencv/include/ \
     $$PWD/libs/opencv/include/opencv2/ \
     $$PWD/libs/ffmpeg/include/ \
+    $$PWD/libs/sqlite/include/ \
 
 SOURCES += \
-    $$PWD/VideoAnalyser.cpp \
+    $$PWD/AcquireVideoInfo.cpp \
     $$PWD/main.cpp \
-    $$PWD/widget.cpp \
-    $$PWD/flowrate.cpp \
+    $$PWD/VideoRecord.cpp \
     $$PWD/CameraParamWidget.cpp \
+    $$PWD/GifPlayer.cpp \
+    $$PWD/DataAnalysis.cpp \
+    $$PWD/AsyncProcesser.cpp \
+    $$PWD/DADataDisplayScene.cpp \
+    #$$PWD/DAVesselGraphScene.cpp \
+    $$PWD/AsyncProcesser.cpp \
+    $$PWD/HalconBase.cpp \
+    $$PWD/VesselAlgorithm.cpp \
 
 HEADERS += \
-    $$PWD/VideoAnalyser.h \
-    $$PWD/widget.h \
-    $$PWD/flowrate.h \
+    $$PWD/AcquireVideoInfo.h \
+    $$PWD/VideoRecord.h \
     $$PWD/CameraParamWidget.h \
     $$PWD/CameraObjectParamProxy.h \
+    $$PWD/GifPlayer.h \
+    $$PWD/DataAnalysis.h \
+    $$PWD/AsyncProcesser.h \
+    $$PWD/DADataDisplayScene.h \
+    #$$PWD/DAVesselGraphScene.h \
+    $$PWD/AsyncProcesser.h \
+    $$PWD/HalconBase.h \
+    $$PWD/VesselAlgorithm.h \
 
 FORMS += \
     $$PWD/CameraParamWidget.ui \
-    $$PWD/widget.ui \
-    $$PWD/VideoAnalyser.ui \
+    $$PWD/VideoRecord.ui \
+    $$PWD/DataAnalysis.ui \
 
 LIBS += \
     $$PWD/libs/AVTCamera/lib/*.lib \
@@ -52,6 +67,7 @@ LIBS += \
     $$PWD/libs/HALCON/lib/*.lib \
     $$PWD/libs/opencv/lib/*.lib \
     $$PWD/libs/ffmpeg/lib/*.lib \
+    $$PWD/libs/sqlite/lib/*.lib \
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

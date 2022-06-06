@@ -1,11 +1,11 @@
-﻿#include "widget.h"
+﻿#include "VideoRecord.h"
 
 #include <QApplication>
 
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
-    Widget w;
+    VideoRecord w;
     w.show();
     return a.exec();
 }
