@@ -763,9 +763,12 @@ void HalconInterfaceBase::calculateGlycocalyx(HObject CenterLines, HObject Regio
             GetFullMatrix(beta, &Values);
 
             Value = (HTuple(Values[1])/((HTuple(Values[0])-Median).TupleAbs()))/2;
+            if(Value <= 5)
+            {
+                X0 = X0.TupleConcat(Value);
+            }
 
             //X0 代表 线性回归方程与X轴的交点。
-            X0 = X0.TupleConcat(Value);
             //*******************************用矩阵进行最小二乘求解(end)*****************************
         }
 

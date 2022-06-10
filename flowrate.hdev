@@ -2107,9 +2107,13 @@
 <l>        get_full_matrix(beta, Values)</l>
 <c>        </c>
 <l>        Value:= (Values[1]/ abs(Values[0]-Median))/2</l>
-<c>        </c>
+<l>        if(Value&lt;=5)</l>
+<l>            X0 := [X0, Value]</l>
+<l>        else</l>
+<l>            continue</l>
+<l>        endif</l>
 <c>        *X0 代表 线性回归方程与X轴的交点。</c>
-<l>        X0 := [X0, Value]     </l>
+<c>           </c>
 <c>        ********************************用矩阵进行最小二乘求解(end)*****************************     </c>
 <l>    endfor</l>
 <c>    </c>
