@@ -98,32 +98,31 @@ void AsyncVideoRecorder::run()
 }
 /**********AsyncVideoRecorder**********/
 
-/**********AsyncVesselDataCalculator**********/
-AsyncVesselDataCalculator::AsyncVesselDataCalculator(QVector<QImage> &imagelist, QString absVideoPath, double fps, double pixelSize, int magnification) :
+/**********AsyncVesselInfoCalculator**********/
+AsyncDataAnalyser::AsyncDataAnalyser(QVector<QImage> &imagelist, QString absVideoPath, double fps, double pixelSize, int magnification) :
     mAbsVideoPath(absVideoPath), mFps(fps), mPixelSize(pixelSize), mMagnification(magnification), mFirstSharpImageIndex(0)
 {
     mImagelist = std::move(imagelist);
 }
 
-AsyncVesselDataCalculator::~AsyncVesselDataCalculator()
+AsyncDataAnalyser::~AsyncDataAnalyser()
 {
     this->quit();
 }
 
-VesselData& AsyncVesselDataCalculator::getVesselData()
+VesselInfo& AsyncDataAnalyser::getVesselInfo()
 {
-    return mVesselData;
+    return mVesselInfo;
 }
 
-int AsyncVesselDataCalculator::getFirstSharpImageIndex()
+int AsyncDataAnalyser::getFirstSharpImageIndex()
 {
     return mFirstSharpImageIndex;
 }
 
-void AsyncVesselDataCalculator::run()
+void AsyncDataAnalyser::run()
 {
-    VesselAlgorithm::calculateAll(mImagelist, mPixelSize, mMagnification, mFps, mVesselData, mFirstSharpImageIndex);
-    mVesselData.absVideoPath = mAbsVideoPath;
+    VesselAlgorithm::calculateAll(mImagelist, mPixelSize, mMagnification, mFps, mVesselInfo, mFirstSharpImageIndex);
     emit signalUpdateTrackArea(this);
 }
 /**********AsyncFlowTrackAreaCalculator**********/

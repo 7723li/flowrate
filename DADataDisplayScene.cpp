@@ -1,9 +1,9 @@
 ﻿#include "DADataDisplayScene.h"
 
 DADataDisplayScene::DADataDisplayScene(Ui_DataAnalysis& ui, const QVector<QImage>& imageList, QObject *p):
-    QGraphicsScene(p), mUI(ui), mImageList(imageList), mCurrentFrameIndex(0), mTotalFrameCount(0), mVesselData(nullptr),
+    QGraphicsScene(p), mUI(ui), mImageList(imageList), mCurrentFrameIndex(0), mTotalFrameCount(0), mVesselInfo(nullptr),
     mSharpness(0.0), mIsSharp(false), mIsShowingRegionSkeleton(true), mIsShowingRegionBorder(false), mIsShowingRegionUnion(false),
-    mChoosenVesselDataRowItem(nullptr), mCurrentChoosenPathItem(nullptr), mLastChoosenPathItem(nullptr)
+    mChoosenVesselInfoRowItem(nullptr), mCurrentChoosenPathItem(nullptr), mLastChoosenPathItem(nullptr)
 {
     connect(mUI.showRegionCombobox, &QComboBox::currentTextChanged, this, &DADataDisplayScene::slotChangeShowRegion);
     connect(mUI.exportCurrentImage, &QPushButton::clicked, this, &DADataDisplayScene::slotExportCurrenImage);
@@ -30,9 +30,9 @@ void DADataDisplayScene::updateFrameCount(int frameCount)
     this->update();
 }
 
-void DADataDisplayScene::updateVesselData(const VesselData &vesselData)
+void DADataDisplayScene::updateVesselInfo(const VesselInfo &vesselInfo)
 {
-    mVesselData = &vesselData;
+    mVesselInfo = &vesselInfo;
 
     this->update();
 }
@@ -73,6 +73,11 @@ void DADataDisplayScene::wheelEvent(QGraphicsSceneWheelEvent *e)
 
 void DADataDisplayScene::drawBackground(QPainter *painter, const QRectF &rect)
 {
+    if(mImageList.empty())
+    {
+        return;
+    }
+
     QImage currentImage = mImageList[mCurrentFrameIndex];
     mShowImage = currentImage;
 
@@ -84,12 +89,12 @@ void DADataDisplayScene::drawBackground(QPainter *painter, const QRectF &rect)
 
     qreal scalex = rect.width() / mShowImage.width(), scaley = rect.height() / mShowImage.height();
 
-    if(mVesselData && (mIsShowingRegionSkeleton || mIsShowingRegionBorder || mIsShowingRegionUnion))
+    if(mVesselInfo && (mIsShowingRegionSkeleton || mIsShowingRegionBorder || mIsShowingRegionUnion))
     {
         if(mIsShowingRegionSkeleton)
         {
             int vesselIndex = 0;
-            for(const RegionPoints& regionPoints : mVesselData->regionsSkeletonPoints)
+            for(const RegionPoints& regionPoints : mVesselInfo->regionsSkeletonPoints)
             {
                 QPainterPath path;
                 for(const QPoint& regionPoint : regionPoints)
@@ -114,7 +119,7 @@ void DADataDisplayScene::drawBackground(QPainter *painter, const QRectF &rect)
         if(mIsShowingRegionBorder)
         {
             int vesselIndex = 0;
-            for(const RegionPoints& regionPoints : mVesselData->regionsBorderPoints)
+            for(const RegionPoints& regionPoints : mVesselInfo->regionsBorderPoints)
             {
                 QPainterPath path;
                 for(const QPoint& regionPoint : regionPoints)
@@ -140,7 +145,7 @@ void DADataDisplayScene::drawBackground(QPainter *painter, const QRectF &rect)
         {
             int vesselIndex = 0;
             Qt::GlobalColor color;
-            for(const RegionPoints& regionPoints : mVesselData->regionsUnionPoints)
+            for(const RegionPoints& regionPoints : mVesselInfo->regionsUnionPoints)
             {
                 QPainterPath path;
                 for(const QPoint& regionPoint : regionPoints)
@@ -207,15 +212,15 @@ void DADataDisplayScene::mousePressEvent(QGraphicsSceneMouseEvent *e)
         return;
     }
 
-    if(mChoosenVesselDataRowItem && mChoosenVesselDataRowItem->isSelected())
+    if(mChoosenVesselInfoRowItem && mChoosenVesselInfoRowItem->isSelected())
     {
-        mChoosenVesselDataRowItem->setSelected(false);
+        mChoosenVesselInfoRowItem->setSelected(false);
     }
 
     int index = showingRegion.indexOf(static_cast<QGraphicsPathItem*>(pressedItems.front()));
-    mChoosenVesselDataRowItem = mUI.dataDisplayList->item(index, 0);
-    mUI.dataDisplayList->scrollToItem(mChoosenVesselDataRowItem);
-    mChoosenVesselDataRowItem->setSelected(true);
+    mChoosenVesselInfoRowItem = mUI.dataDisplayList->item(index, 0);
+    mUI.dataDisplayList->scrollToItem(mChoosenVesselInfoRowItem);
+    mChoosenVesselInfoRowItem->setSelected(true);
 }
 
 void DADataDisplayScene::slotChangeShowRegion(const QString &regionName)
@@ -321,12 +326,12 @@ void DADataDisplayScene::slotDataListClicked(const QModelIndex &index)
 {
     int rowindex = index.row();
 
-    if(mChoosenVesselDataRowItem && mChoosenVesselDataRowItem->isSelected())
+    if(mChoosenVesselInfoRowItem && mChoosenVesselInfoRowItem->isSelected())
     {
-        mChoosenVesselDataRowItem->setSelected(false);
+        mChoosenVesselInfoRowItem->setSelected(false);
     }
-    mChoosenVesselDataRowItem = mUI.dataDisplayList->item(rowindex, 0);
-    mChoosenVesselDataRowItem->setSelected(true);
+    mChoosenVesselInfoRowItem = mUI.dataDisplayList->item(rowindex, 0);
+    mChoosenVesselInfoRowItem->setSelected(true);
 
     QVector<QGraphicsPathItem*>&& showingRegion = QVector<QGraphicsPathItem*>();
     if(mIsShowingRegionSkeleton)

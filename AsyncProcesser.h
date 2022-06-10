@@ -5,6 +5,7 @@
 #include <QImage>
 #include <QTimer>
 #include <QDebug>
+#include <QDateTime>
 
 #include <mutex>
 
@@ -75,15 +76,15 @@ private:
 * @brief
 * 异步帧流动轨迹计算
 */
-class AsyncVesselDataCalculator : public QThread
+class AsyncDataAnalyser : public QThread
 {
     Q_OBJECT
 
 public:
-    explicit AsyncVesselDataCalculator(QVector<QImage>& imagelist, QString absVideoPath, double fps, double pixelSize, int magnification);
-    virtual ~AsyncVesselDataCalculator() override;
+    explicit AsyncDataAnalyser(QVector<QImage>& imagelist, QString absVideoPath, double fps, double pixelSize, int magnification);
+    virtual ~AsyncDataAnalyser() override;
 
-    VesselData& getVesselData();
+    VesselInfo& getVesselInfo();
 
     int getFirstSharpImageIndex();
 
@@ -91,7 +92,7 @@ protected:
     virtual void run() override;
 
 signals:
-    void signalUpdateTrackArea(AsyncVesselDataCalculator*);
+    void signalUpdateTrackArea(AsyncDataAnalyser*);
 
 private:
     QVector<QImage> mImagelist;
@@ -100,16 +101,10 @@ private:
     double mPixelSize;
     int mMagnification;
 
-    VesselData mVesselData;
+    VesselInfo mVesselInfo;
     int mFirstSharpImageIndex;
 
     bool mCalculating;
 
     QEventLoop mEventLoop;
-};
-
-class VideoRecordAsyncCalculator
-{
-public:
-    VideoRecordAsyncCalculator();
 };

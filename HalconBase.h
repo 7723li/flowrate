@@ -65,7 +65,7 @@ protected:
      * @brief
      * 清晰度计算
      */
-    static void getImageSharpness(const HObject& ImageOri, HTuple& sharpness, HTuple& isSharp);
+    static void getImageSharpness(const HObject& ImageOri, HTuple* sharpness, HTuple* isSharp);
 
     /*!
      * @brief

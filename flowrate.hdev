@@ -90,16 +90,9 @@
 <l>calculate_flowrate (ImageGaussConcat, RegionVesselSplited, NumberCenterLines, TupleProcessImageIndex, TupleTranPrevToRearRows, TupleTranPrevToRearCols, 5.6, 5, 30, Flowrate)</l>
 <c></c>
 <c>***************************************调试显示***************************************</c>
-<l>gen_empty_obj(EmptyObject)</l>
-<l>for I:=1 to NumberCenterLines by 1</l>
-<l>    select_obj(CenterLines, ObjectSelected, I)</l>
-<l>    get_contour_xld(ObjectSelected, Row, Col)</l>
-<l>    gen_region_polygon(Region, Row, Col)</l>
-<l>    concat_obj(EmptyObject, Region, EmptyObject)</l>
-<l>endfor</l>
 <c></c>
 <l>if(debug or pathloop)</l>
-<l>    select_obj(ImageList, ImageDebug, TupleProcessImageIndex[0])</l>
+<l>    select_obj(ImageList, ImageDebug, TupleProcessImageIndex[0]+1)</l>
 <c>    </c>
 <l>    ColorList:=['red', 'green', 'blue', 'cyan', 'yellow']</l>
 <c></c>
@@ -265,6 +258,7 @@
 </interface>
 <body>
 <l>Sharpness:=0</l>
+<l>IsSharp:=false</l>
 <c></c>
 <c>* 计算图像整体的灰度方差</c>
 <l>get_image_size(ImageOri, Width, Height)</l>
@@ -274,7 +268,11 @@
 <l>if(Deviation&gt;0)</l>
 <c>    * 根据灰度方差进行对比度强化 如果灰度方差大 说明原来的对比度较高 则强化的程度可以降低 反之亦然</c>
 <c>    * 强化完成后做一次小型模糊 弱化噪点</c>
-<l>    emphasize(ImageOri, ImageEmphasize, 255.0/Deviation, 255.0/Deviation, 1)</l>
+<l>    try</l>
+<l>        emphasize(ImageOri, ImageEmphasize, 255.0/Deviation, 255.0/Deviation, 1)</l>
+<l>    catch (Exception)</l>
+<l>        return()</l>
+<l>    endtry</l>
 <l>    gauss_filter(ImageEmphasize, ImageGauss, 3)</l>
 <c>    </c>
 <c>    * canny计算并提取图像上的边缘</c>
@@ -295,7 +293,6 @@
 <c>        </c>
 <c>            * 用边缘和边缘骨架的像素之商作为清晰度评分</c>
 <c>            * 约清晰 评分约接近1 但永远不低于1</c>
-<c>            </c>
 <l>            skeleton(RegionUnion, Skeleton)</l>
 <l>            area_center(RegionUnion, Area, useless, useless)</l>
 <l>            area_center(Skeleton, Area1, useless, useless)</l>
@@ -1572,6 +1569,14 @@
 <l>endif</l>
 <c></c>
 <l>pre_process (ImagePrev, ImagePrevGauss, RegionVesselPrev)</l>
+<l>area_center(RegionVesselPrev, AreaRegionVesselPrev, useless, useless)</l>
+<l>if((|AreaRegionVesselPrev| == 0 or -1 == AreaRegionVesselPrev or 0 == AreaRegionVesselPrev)==false)</l>
+<l>    get_image_sharpness (ImagePrev, Sharpness, IsSharp)</l>
+<l>    if(IsSharp)</l>
+<l>        TupleProcessImageIndex:=0</l>
+<l>        AntiShakeFrameNumber:=AntiShakeFrameNumber+1</l>
+<l>    endif</l>
+<l>endif</l>
 <c></c>
 <c>* 防抖后的合并掩膜</c>
 <l>gen_rectangle1(RegionAntiShakeMergeMask, 0, 0, Height, Width)</l>
@@ -1581,6 +1586,11 @@
 <c></c>
 <c>* 遍历图像序列</c>
 <l>count_obj(ImageList, ImageListNumber)</l>
+<c></c>
+<l>gen_empty_obj(RegionVesselConcat)</l>
+<l>gen_empty_obj(ImageGaussConcat)</l>
+<l>gen_empty_obj(RegionVesselConcatDebug)</l>
+<c></c>
 <l>for I:=2 to ImageListNumber by 1</l>
 <c>    * 后一帧预处理</c>
 <l>    select_obj(ImageList, ImageRear, I)</l>
@@ -1622,22 +1632,13 @@
 <l>    TupleTranPrevToRearCols:=[TupleTranPrevToRearCols, MaxIntersectAreaCol]</l>
 <c>    </c>
 <c>    * 记录合并血管区域和细胞轨迹</c>
-<l>    if(|TupleProcessImageIndex|&gt;1)</l>
-<l>        concat_obj(RegionVesselConcat, RegionVesselPrev, RegionVesselConcat)</l>
-<l>        concat_obj (ImageGaussConcat, ImagePrevGauss, ImageGaussConcat)</l>
-<c>        </c>
-<l>        if(debug)</l>
-<l>            affine_trans_region(RegionVesselConcatDebug, RegionVesselConcatDebug, HomMat2DPrevToRear, 'nearest_neighbor')</l>
-<l>            affine_trans_region(RegionVesselPrev, RegionVesselPrevDebug, HomMat2DPrevToRear, 'nearest_neighbor')</l>
-<l>            concat_obj(RegionVesselConcatDebug, RegionVesselPrevDebug, RegionVesselConcatDebug)</l>
-<l>        endif</l>
-<l>    else</l>
-<l>        RegionVesselConcat:=RegionVesselPrev</l>
-<l>        ImageGaussConcat := ImagePrevGauss</l>
-<c>        </c>
-<l>        if(debug)</l>
-<l>            RegionVesselConcatDebug:=RegionVesselPrev</l>
-<l>        endif</l>
+<l>    concat_obj(RegionVesselConcat, RegionVesselPrev, RegionVesselConcat)</l>
+<l>    concat_obj (ImageGaussConcat, ImagePrevGauss, ImageGaussConcat)</l>
+<c>    </c>
+<l>    if(debug)</l>
+<l>        affine_trans_region(RegionVesselConcatDebug, RegionVesselConcatDebug, HomMat2DPrevToRear, 'nearest_neighbor')</l>
+<l>        affine_trans_region(RegionVesselPrev, RegionVesselPrevDebug, HomMat2DPrevToRear, 'nearest_neighbor')</l>
+<l>        concat_obj(RegionVesselConcatDebug, RegionVesselPrevDebug, RegionVesselConcatDebug)</l>
 <l>    endif</l>
 <c>    </c>
 <c>    * 调试显示</c>
@@ -1711,25 +1712,15 @@
 <l>lines_gauss(ImageRegionVesselConcat, RawCenterLines, Sigma, Low, High, 'light', 'true', 'parabolic', 'true')</l>
 <c></c>
 <c>* 选择长度100及以下的进行合并 大于100的不合并</c>
-<l>NeedUnionContoursCount:=0</l>
-<l>NoNeedUnionContoursCount:=0</l>
 <l>length_xld(RawCenterLines, LengthRawCenterLines)</l>
+<l>gen_empty_obj(NeedUnionContours)</l>
+<l>gen_empty_obj(NoNeedUnionContours)</l>
 <l>for I:=1 to |LengthRawCenterLines| by 1</l>
 <l>    select_obj(RawCenterLines, RawCenterLine, I)</l>
 <l>    if(LengthRawCenterLines[I-1]&lt;=100)</l>
-<l>        if(NeedUnionContoursCount)</l>
-<l>            concat_obj(NeedUnionContours, RawCenterLine, NeedUnionContours)</l>
-<l>        else</l>
-<l>            NeedUnionContours:=RawCenterLine</l>
-<l>        endif</l>
-<l>        NeedUnionContoursCount:=NeedUnionContoursCount+1</l>
+<l>        concat_obj(NeedUnionContours, RawCenterLine, NeedUnionContours)</l>
 <l>    else</l>
-<l>        if(NoNeedUnionContoursCount)</l>
-<l>            concat_obj(NoNeedUnionContours, RawCenterLine, NoNeedUnionContours)</l>
-<l>        else</l>
-<l>            NoNeedUnionContours:=RawCenterLine</l>
-<l>        endif</l>
-<l>        NoNeedUnionContoursCount:=NoNeedUnionContoursCount+1</l>
+<l>        concat_obj(NoNeedUnionContours, RawCenterLine, NoNeedUnionContours)</l>
 <l>    endif</l>
 <l>endfor</l>
 <c></c>
@@ -2227,11 +2218,7 @@
 <l>        TrackAreas:=TrackAreas+TrackArea</l>
 <c>        </c>
 <c>        * 计算流速所用的帧数 需要考虑由于不清晰造成的跳帧</c>
-<l>        if(I&gt;1)</l>
-<l>            tuple_gen_const(|TrackArea|, TupleProcessImageIndex[I-1]-TupleProcessImageIndex[I-2], TrackAreasCountPlus)</l>
-<l>        else</l>
-<l>            tuple_gen_const(|TrackArea|, TupleProcessImageIndex[0], TrackAreasCountPlus)</l>
-<l>        endif</l>
+<l>        tuple_gen_const(|TrackArea|, TupleProcessImageIndex[I]-TupleProcessImageIndex[I-1], TrackAreasCountPlus)</l>
 <c>        </c>
 <l>        tuple_find(TrackArea, 0, ZeroIndices)</l>
 <l>        if(|ZeroIndices| and ZeroIndices!=-1)</l>

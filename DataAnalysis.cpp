@@ -1,7 +1,7 @@
 ﻿#include "DataAnalysis.h"
 
 DataAnalysis::DataAnalysis(double fps, QWidget *p):
-    QWidget(p), mGifPlayer(new GifPlayer(mImageList, fps, nullptr)), mVesselData(nullptr)
+    QWidget(p), mGifPlayer(new GifPlayer(mImageList, fps, nullptr))
 {
     mUI.setupUi(this);
 
@@ -50,28 +50,28 @@ void DataAnalysis::setFirstSharpImageIndex(int firstSharpImageIndex)
     mDADataDisplayScene->setFirstSharpImageIndex(firstSharpImageIndex);
 }
 
-void DataAnalysis::updateVesselData(const VesselData &vesselData)
+void DataAnalysis::updateVesselInfo(VesselInfo &vesselInfo)
 {
-    mVesselData = &vesselData;
-    mDADataDisplayScene->updateVesselData(vesselData);
+    mVesselInfo = vesselInfo;
+    mDADataDisplayScene->updateVesselInfo(mVesselInfo);
 
-    mUI.dataDisplayList->setRowCount(vesselData.vesselNumber);
-    for(int i = 0; i < vesselData.vesselNumber; ++i)
+    mUI.dataDisplayList->setRowCount(mVesselInfo.vesselNumber);
+    for(int i = 0; i < mVesselInfo.vesselNumber; ++i)
     {
         QTableWidgetItem* item = new QTableWidgetItem;
-        item->setText(QString::number(vesselData.diameters[i]));
+        item->setText(QString::number(mVesselInfo.diameters[i]));
         mUI.dataDisplayList->setItem(i, 0, item);
 
         item = new QTableWidgetItem;
-        item->setText(QString::number(vesselData.lengths[i]));
+        item->setText(QString::number(mVesselInfo.lengths[i]));
         mUI.dataDisplayList->setItem(i, 1, item);
 
         item = new QTableWidgetItem;
-        item->setText(QString::number(vesselData.flowrates[i]));
+        item->setText(QString::number(mVesselInfo.flowrates[i]));
         mUI.dataDisplayList->setItem(i, 2, item);
 
         item = new QTableWidgetItem;
-        item->setText(QString::number(vesselData.glycocalyx[i]));
+        item->setText(QString::number(mVesselInfo.glycocalyx[i]));
         mUI.dataDisplayList->setItem(i, 3, item);
     }
 }
@@ -100,7 +100,7 @@ void DataAnalysis::slotExportData()
         currentDir.cd("data");
     }
 
-    if(!mVesselData)
+    if(mVesselInfo.pkVesselInfoID.isEmpty())
     {
         return;
     }
@@ -117,22 +117,27 @@ void DataAnalysis::slotExportData()
 
     //设置表格数据
     double diametersSum = 0.0, lengthSum = 0.0, flowrateSum = 0.0, glycocalyxSum = 0.0;
-    for(int i = 0; i < mVesselData->vesselNumber; ++i)
+    int glycocalyxCount = 0;
+    for(int i = 0; i < mVesselInfo.vesselNumber; ++i)
     {
         QString writeRow(", %1, %2, %3, %4\n");
-        writeRow = writeRow.arg(mVesselData->diameters[i]).arg(mVesselData->lengths[i]).arg(mVesselData->flowrates[i]).arg(mVesselData->glycocalyx[i]);
-        diametersSum += mVesselData->diameters[i];
-        lengthSum += mVesselData->lengths[i];
-        flowrateSum += mVesselData->flowrates[i];
-        glycocalyxSum += mVesselData->glycocalyx[i];
+        writeRow = writeRow.arg(mVesselInfo.diameters[i]).arg(mVesselInfo.lengths[i]).arg(mVesselInfo.flowrates[i]).arg(mVesselInfo.glycocalyx[i]);
+        diametersSum += mVesselInfo.diameters[i];
+        lengthSum += mVesselInfo.lengths[i];
+        flowrateSum += mVesselInfo.flowrates[i];
+        if(-mVesselInfo.glycocalyx[i] != 1.0)
+        {
+            glycocalyxSum += mVesselInfo.glycocalyx[i];
+            ++glycocalyxCount;
+        }
         excelFile.write(writeRow.toUtf8());
     }
 
     excelFile.write(QStringLiteral("平均值：, %1, %2, %3, %4\n")
-                    .arg(diametersSum / mVesselData->vesselNumber)
-                    .arg(lengthSum / mVesselData->vesselNumber)
-                    .arg(flowrateSum / mVesselData->vesselNumber)
-                    .arg(glycocalyxSum / mVesselData->vesselNumber)
+                    .arg(diametersSum / mVesselInfo.vesselNumber)
+                    .arg(lengthSum / mVesselInfo.vesselNumber)
+                    .arg(flowrateSum / mVesselInfo.vesselNumber)
+                    .arg(glycocalyxSum / glycocalyxCount)
                     .toUtf8());
 
     excelFile.close();

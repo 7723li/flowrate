@@ -25,7 +25,7 @@ public:
 
     void updateFrameCount(int frameCount);
 
-    void updateVesselData(const VesselData& vesselData);
+    void updateVesselInfo(const VesselInfo& vesselInfo);
 
     void setFirstSharpImageIndex(int firstSharpImageIndex);
 
@@ -64,7 +64,7 @@ private:
     int mCurrentFrameIndex;         // 当前帧下标
     int mTotalFrameCount;           // 总帧数
 
-    const VesselData* mVesselData;  // 全部图片的血管数据
+    const VesselInfo* mVesselInfo;  // 全部图片的血管数据
 
     double mSharpness;              // 清晰度数值
     bool mIsSharp;                  // 是否清晰
@@ -77,7 +77,7 @@ private:
     QVector<QGraphicsPathItem*> mBorderPathItems;           // 血管边缘轮廓
     QVector<QGraphicsPathItem*> mRegionUnionPathItems;      // 血管完整区域
 
-    QTableWidgetItem* mChoosenVesselDataRowItem;            // 选中的血管数据行
+    QTableWidgetItem* mChoosenVesselInfoRowItem;            // 选中的血管数据行
     QGraphicsPathItem* mCurrentChoosenPathItem;             // 选中的血管数据行对应的显示血管
     QGraphicsPathItem* mLastChoosenPathItem;
 };

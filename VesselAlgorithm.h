@@ -6,24 +6,9 @@
 #include <QDebug>
 
 #include "HalconBase.h"
+#include "CommonDataStruct.h"
 
 using namespace HalconCpp;
-using RegionPoints = QVector<QPoint>;
-
-struct VesselData
-{
-    VesselData() : vesselNumber(0){}
-
-    QString absVideoPath;
-    int vesselNumber;
-    QVector<RegionPoints> regionsSkeletonPoints;
-    QVector<RegionPoints> regionsBorderPoints;
-    QVector<RegionPoints> regionsUnionPoints;
-    QVector<double> diameters;
-    QVector<double> lengths;
-    QVector<double> glycocalyx;
-    QVector<double> flowrates;
-};
 
 /*!
  * @brief
@@ -99,7 +84,7 @@ public:
      * @brief
      * 一条龙服务
      */
-    static void calculateAll(const QVector<QImage>& imagelist, double pixelSize, int magnification, double fps, VesselData& vesselData, int& firstSharpImageIndex);
+    static void calculateAll(const QVector<QImage>& imagelist, double pixelSize, int magnification, double fps, VesselInfo& vesselInfo, int& firstSharpImageIndex);
 
 private:
     /*!

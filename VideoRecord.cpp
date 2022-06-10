@@ -13,11 +13,14 @@ VideoRecord::VideoRecord(QWidget *parent)
     mUI.setupUi(this);
     mUI.begin_stop_record_stack->setCurrentWidget(mUI.page_begin_record_btn);
     mUI.begin_record_btn->setEnabled(false);
+    mUI.videorecord->setVerticalScrollMode(QTableWidget::ScrollMode::ScrollPerPixel);
+    mUI.videorecord->setHorizontalScrollMode(QTableWidget::ScrollMode::ScrollPerPixel);
+    mUI.videorecord->installEventFilter(this);
+
     connect(mUI.begin_record_btn, &QPushButton::clicked, this, &VideoRecord::beginRecord);
     connect(mUI.stop_record_btn, &QPushButton::clicked, this, &VideoRecord::stopRecord);
     connect(mUI.checkBoxAutoRecord, &QCheckBox::stateChanged, this, &VideoRecord::slotAutoRecordChecked);
     connect(mUI.continueRecordNum, &QComboBox::currentTextChanged, this, &VideoRecord::slotContinueRecordNumChanged);
-    connect(mUI.videorecord, &QTableWidget::doubleClicked, this, &VideoRecord::slotVideoRecordDoubleClick);
     connect(mUI.importButton, &QPushButton::clicked, this, &VideoRecord::slotImportDir);
     connect(mUI.exportAllData, &QPushButton::clicked, this, &VideoRecord::slotExportAllData);
 
@@ -52,6 +55,18 @@ VideoRecord::VideoRecord(QWidget *parent)
     mLoopCalcFlowTrackTimer.setInterval(1000);
     connect(&mLoopCalcFlowTrackTimer, &QTimer::timeout, this, &VideoRecord::slotLoopCalcFlowTrack);
     mLoopCalcFlowTrackTimer.start();
+
+    {
+        QVector<VideoInfo> savedVideoInfo;
+        if(TableVideoInfo::getTableVideoInfo().selectVideoInfo(savedVideoInfo))
+        {
+            for(int i = 0; i < savedVideoInfo.size(); ++i)
+            {
+                mMapVideoRecordRowToPkVesselInfoID[i] = savedVideoInfo[i].fkVesselInfoID;
+                insertOneVideoRecord(savedVideoInfo[i]);
+            }
+        }
+    }
 
     QTimer::singleShot(1000, this, &VideoRecord::slotInitOpenCamera);
 }
@@ -420,6 +435,32 @@ void VideoRecord::closeEvent(QCloseEvent *e)
     mDataAnalysisList.clear();
 }
 
+bool VideoRecord::eventFilter(QObject *obj, QEvent *e)
+{
+    if(obj == mUI.videorecord)
+    {
+        if(e->type() == QEvent::KeyPress)
+        {
+            QKeyEvent* keyEvent = static_cast<QKeyEvent*>(e);
+            if(keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_Return)
+            {
+                keyEvent->accept();
+
+                QList<QTableWidgetItem*> selectedItems = mUI.videorecord->selectedItems();
+                for(QTableWidgetItem* videorecordItem : selectedItems)
+                {
+                    slotEnterDataAnalysis(videorecordItem);
+                }
+
+                return true;
+            }
+        }
+    }
+
+    e->ignore();
+    return false;
+}
+
 void VideoRecord::slotInitOpenCamera()
 {
     if (openCamera())
@@ -540,9 +581,9 @@ void VideoRecord::slotContinueRecordNumChanged(const QString& number)
     mContinueRecordVideoCount = number.toInt();
 }
 
-void VideoRecord::slotVideoRecordDoubleClick(const QModelIndex &index)
+void VideoRecord::slotEnterDataAnalysis(QTableWidgetItem *videorecordItem)
 {
-    int inRow = index.row();
+    int inRow = videorecordItem->row();
 
     QString videoPath = mUI.videorecord->item(inRow, 0)->text();
     if(videoPath.isEmpty() || !QFile::exists(videoPath))
@@ -565,11 +606,15 @@ void VideoRecord::slotVideoRecordDoubleClick(const QModelIndex &index)
         mDataAnalysisList[inRow] = videoFramePlayer;
         connect(videoFramePlayer, &DataAnalysis::signalExit, this, &VideoRecord::slotCloseVideoFramePlayer);
 
-        auto iter = mMapVideoRecordRowToFlowtrackArea.find(inRow);
-        if(iter != mMapVideoRecordRowToFlowtrackArea.end())
+        auto iter = mMapVideoRecordRowToPkVesselInfoID.find(inRow);
+        if(iter != mMapVideoRecordRowToPkVesselInfoID.end())
         {
-            videoFramePlayer->setFirstSharpImageIndex(mFirstSharpImageIndexList[inRow]);
-            videoFramePlayer->updateVesselData(mMapVideoRecordRowToFlowtrackArea[inRow]);
+            VesselInfo vesselInfo;
+            if(TableVesselInfo::getTableVesselInfo().selectVesselInfo(vesselInfo, iter.value()))
+            {
+                videoFramePlayer->setFirstSharpImageIndex(mFirstSharpImageIndexList[inRow]);
+                videoFramePlayer->updateVesselInfo(vesselInfo);
+            }
         }
 
         videoFramePlayer->setVideoAbsPath(videoPath);
@@ -588,6 +633,24 @@ void VideoRecord::slotVideoRecordDoubleClick(const QModelIndex &index)
 void VideoRecord::slotImportDir()
 {
     QString inputdir = mUI.importDir->text();
+
+    VideoInfo videoInfo;
+    QList<VideoInfo> videoInfoList;
+
+    QFileInfo inputdirInfo(inputdir);
+    if(inputdirInfo.isFile())
+    {
+        if(inputdirInfo.fileName().endsWith(".avi"))
+        {
+            if(insertOneVideoRecord(inputdirInfo, videoInfo))
+            {
+                TableVideoInfo::getTableVideoInfo().insertVideoInfo(videoInfo);
+                mPkVideoInfoIDList.push_back(videoInfo.pkVideoInfoID);
+            }
+        }
+        return;
+    }
+
     QDir dir(inputdir);
     if(!dir.exists())
     {
@@ -612,12 +675,28 @@ void VideoRecord::slotImportDir()
         }
     }
 
+    QFileInfoList importFileinfolist;
     for(const QFileInfo& fileinfo : fileinfolist)
     {
         if(fileinfo.fileName().endsWith(".avi"))
         {
-            insertOneVideoRecord(fileinfo);
+            importFileinfolist.push_back(fileinfo);
         }
+    }
+    fileinfolist.clear();
+
+    for(const QFileInfo& fileinfo : importFileinfolist)
+    {
+        if(insertOneVideoRecord(fileinfo, videoInfo))
+        {
+            videoInfoList.push_back(videoInfo);
+        }
+    }
+    TableVideoInfo::getTableVideoInfo().insertVideoInfo(videoInfoList);
+
+    for(const VideoInfo& videoInfo : videoInfoList)
+    {
+        mPkVideoInfoIDList.push_back(videoInfo.pkVideoInfoID);
     }
 }
 
@@ -662,11 +741,11 @@ void VideoRecord::slotLoopCalcFlowTrack()
                 ++mFlowTrackCalculatingNumer;
                 mUI.videorecord->item(rowIndex, 5)->setText(QStringLiteral("计算中"));
 
-                AsyncVesselDataCalculator* asyncVesselDataCalculator = new AsyncVesselDataCalculator(imagelist, path, fps, pixelSize, magnification);
-                mMapFlowTrackThreadToRowIndex[asyncVesselDataCalculator] = rowIndex;
-                connect(asyncVesselDataCalculator, &AsyncVesselDataCalculator::signalUpdateTrackArea, this, &VideoRecord::slotUpdateVesselData);
+                AsyncDataAnalyser* asyncDataAnalyser = new AsyncDataAnalyser(imagelist, path, fps, pixelSize, magnification);
+                mMapDataAnalyserToRowIndex[asyncDataAnalyser] = rowIndex;
+                connect(asyncDataAnalyser, &AsyncDataAnalyser::signalUpdateTrackArea, this, &VideoRecord::slotDataAnalysisFinish);
 
-                asyncVesselDataCalculator->start();
+                asyncDataAnalyser->start();
             }
         }
         else
@@ -676,41 +755,53 @@ void VideoRecord::slotLoopCalcFlowTrack()
     }
 }
 
-void VideoRecord::slotUpdateVesselData(AsyncVesselDataCalculator *asyncVesselDataCalculator)
+void VideoRecord::slotDataAnalysisFinish(AsyncDataAnalyser *asyncDataAnalyser)
 {
-    if(!asyncVesselDataCalculator)
+    if(!asyncDataAnalyser)
     {
         return;
     }
     else
     {
-        auto iter = mMapFlowTrackThreadToRowIndex.find(asyncVesselDataCalculator);
-        if(iter == mMapFlowTrackThreadToRowIndex.end())
+        auto iter = mMapDataAnalyserToRowIndex.find(asyncDataAnalyser);
+        if(iter == mMapDataAnalyserToRowIndex.end())
         {
             return;
         }
     }
 
-    VesselData tVesselData = std::move(asyncVesselDataCalculator->getVesselData());
+    VesselInfo tVesselInfo = std::move(asyncDataAnalyser->getVesselInfo());
 
-    int inRow = mMapFlowTrackThreadToRowIndex[asyncVesselDataCalculator];
-    mMapFlowTrackThreadToRowIndex.remove(asyncVesselDataCalculator);
-    mFirstSharpImageIndexList[inRow] = asyncVesselDataCalculator->getFirstSharpImageIndex();
+    TableVesselInfo::getTableVesselInfo().insertVesselInfo(tVesselInfo);
 
-    delete asyncVesselDataCalculator;
-    asyncVesselDataCalculator = nullptr;
+    int inRow = mMapDataAnalyserToRowIndex[asyncDataAnalyser];
+    int firstSharpFrameIndex = asyncDataAnalyser->getFirstSharpImageIndex();;
+    mMapDataAnalyserToRowIndex.remove(asyncDataAnalyser);
+    mFirstSharpImageIndexList[inRow] = firstSharpFrameIndex;
+
+    delete asyncDataAnalyser;
+    asyncDataAnalyser = nullptr;
 
     --mFlowTrackCalculatingNumer;
 
-    mMapVideoRecordRowToFlowtrackArea[inRow] = tVesselData;
+    mMapVideoRecordRowToPkVesselInfoID[inRow] = tVesselInfo.pkVesselInfoID;
+
+    VideoInfo videoInfo;
+    if(TableVideoInfo::getTableVideoInfo().selectVideoInfo(videoInfo, mPkVideoInfoIDList[inRow]))
+    {
+        videoInfo.fkVesselInfoID = tVesselInfo.pkVesselInfoID;
+        videoInfo.firstSharpFrameIndex = firstSharpFrameIndex;
+        videoInfo.analysisFinishTime = QDateTime::currentDateTime().toTime_t();
+        TableVideoInfo::getTableVideoInfo().updateVideoInfo(videoInfo);
+    }
 
     if(mDataAnalysisList[inRow])
     {
         mDataAnalysisList[inRow]->setFirstSharpImageIndex(mFirstSharpImageIndexList[inRow]);
-        mDataAnalysisList[inRow]->updateVesselData(mMapVideoRecordRowToFlowtrackArea[inRow]);
+        mDataAnalysisList[inRow]->updateVesselInfo(tVesselInfo);
     }
 
-    mUI.videorecord->item(inRow, 5)->setText(QStringLiteral("已完成"));
+    mUI.videorecord->item(inRow, 5)->setText(QStringLiteral("已完成 %1").arg(QDateTime::fromTime_t(videoInfo.analysisFinishTime).toString("yy-MM-dd hh:mm:ss")));
 }
 
 void VideoRecord::slotExportAllData()
@@ -737,32 +828,40 @@ void VideoRecord::slotExportAllData()
     }
 
     //设置表格数据
-    const QList<VesselData> vesselDataList = mMapVideoRecordRowToFlowtrackArea.values();
-    for(const VesselData& vesselData: vesselDataList)
+    VesselInfo vesselInfo;
+    for(auto iter = mMapVideoRecordRowToPkVesselInfoID.begin(); iter != mMapVideoRecordRowToPkVesselInfoID.end(); ++iter)
     {
-        double diametersSum = 0.0, lengthSum = 0.0, flowrateSum = 0.0, glycocalyxSum = 0.0;
-
-        excelFile.write(QString("%1\n").arg(vesselData.absVideoPath).toUtf8());
-        excelFile.write(QStringLiteral(", 直径, 长度, 流速, 糖萼\n").toUtf8());
-
-        for(int i = 0; i < vesselData.vesselNumber; ++i)
+        if(TableVesselInfo::getTableVesselInfo().selectVesselInfo(vesselInfo, iter.value()))
         {
-            QString writeRow(", %1, %2, %3, %4\n");
-            writeRow = writeRow.arg(vesselData.diameters[i]).arg(vesselData.lengths[i]).arg(vesselData.flowrates[i]).arg(vesselData.glycocalyx[i]);
-            diametersSum += vesselData.diameters[i];
-            lengthSum += vesselData.lengths[i];
-            flowrateSum += vesselData.flowrates[i];
-            glycocalyxSum += vesselData.glycocalyx[i];
-            excelFile.write(writeRow.toUtf8());
-        }
+            double diametersSum = 0.0, lengthSum = 0.0, flowrateSum = 0.0, glycocalyxSum = 0.0;
+            int glycocalyxCount = 0;
 
-        excelFile.write(QStringLiteral("平均值：, %1, %2, %3, %4\n")
-                        .arg(diametersSum / vesselData.vesselNumber)
-                        .arg(lengthSum / vesselData.vesselNumber)
-                        .arg(flowrateSum / vesselData.vesselNumber)
-                        .arg(glycocalyxSum / vesselData.vesselNumber)
-                        .toUtf8());
-        excelFile.write("\n");
+            excelFile.write(QString("%1\n").arg(mAbsVideoPathList[iter.key()]).toUtf8());
+            excelFile.write(QStringLiteral(", 直径, 长度, 流速, 糖萼\n").toUtf8());
+
+            for(int i = 0; i < vesselInfo.vesselNumber; ++i)
+            {
+                QString writeRow(", %1, %2, %3, %4\n");
+                writeRow = writeRow.arg(vesselInfo.diameters[i]).arg(vesselInfo.lengths[i]).arg(vesselInfo.flowrates[i]).arg(vesselInfo.glycocalyx[i]);
+                diametersSum += vesselInfo.diameters[i];
+                lengthSum += vesselInfo.lengths[i];
+                flowrateSum += vesselInfo.flowrates[i];
+                if(-vesselInfo.glycocalyx[i] != 1.0)
+                {
+                    glycocalyxSum += vesselInfo.glycocalyx[i];
+                    ++glycocalyxCount;
+                }
+                excelFile.write(writeRow.toUtf8());
+            }
+
+            excelFile.write(QStringLiteral("平均值：, %1, %2, %3, %4\n")
+                            .arg(diametersSum / vesselInfo.vesselNumber)
+                            .arg(lengthSum / vesselInfo.vesselNumber)
+                            .arg(flowrateSum / vesselInfo.vesselNumber)
+                            .arg(glycocalyxSum / glycocalyxCount)
+                            .toUtf8());
+            excelFile.write("\n");
+        }
     }
 
     excelFile.close();
@@ -792,12 +891,17 @@ void VideoRecord::updateRecordTime()
     mRecordDuratiom = mRecordDuratiom.addMSecs(mRecordBeginDateTime.msecsTo(QDateTime::currentDateTime()));
 }
 
-void VideoRecord::insertOneVideoRecord()
+bool VideoRecord::insertOneVideoRecord()
 {
+    QString videoAbsPath = mRecordVideoAbsFileInfo.absoluteFilePath();
+    if(-1 != mAbsVideoPathList.indexOf(videoAbsPath))
+    {
+        return false;
+    }
+    mAbsVideoPathList.push_back(videoAbsPath);
+
     int currentRowCount = mUI.videorecord->rowCount();
     mUI.videorecord->setRowCount(currentRowCount + 1);
-
-    QString videoAbsPath = mRecordVideoAbsFileInfo.absoluteFilePath();
 
     QTableWidgetItem* pathItem = new QTableWidgetItem;
     pathItem->setText(videoAbsPath);
@@ -827,14 +931,31 @@ void VideoRecord::insertOneVideoRecord()
 
     mDataAnalysisList.push_back(nullptr);
     mFirstSharpImageIndexList.push_back(0);
+
+    VideoInfo videoInfo;
+    videoInfo.collectTime = QFileInfo(videoAbsPath).created().toTime_t();
+    videoInfo.videoDuration = mRecordDuratiom.hour() * 3600 + mRecordDuratiom.minute() * 60 + mRecordDuratiom.second();
+    videoInfo.absVideoPath = videoAbsPath;
+    videoInfo.pixelSize = mPixelSize;
+    videoInfo.magnification = mMagnification;
+    videoInfo.fps = mConfigFramerate;
+    TableVideoInfo::getTableVideoInfo().insertVideoInfo(videoInfo);
+    mPkVideoInfoIDList.push_back(videoInfo.pkVideoInfoID);
+
+    return true;
 }
 
-void VideoRecord::insertOneVideoRecord(const QFileInfo &videoFileinfo)
+bool VideoRecord::insertOneVideoRecord(const QFileInfo &videoFileinfo, VideoInfo& insertVideoInfo)
 {
+    QString videoAbsPath = videoFileinfo.absoluteFilePath();
+    if(-1 != mAbsVideoPathList.indexOf(videoAbsPath))
+    {
+        return false;
+    }
+    mAbsVideoPathList.push_back(videoAbsPath);
+
     int currentRowCount = mUI.videorecord->rowCount();
     mUI.videorecord->setRowCount(currentRowCount + 1);
-
-    QString videoAbsPath = videoFileinfo.absoluteFilePath();
 
     int duration = 0;
     double fps = 0.0;
@@ -868,4 +989,61 @@ void VideoRecord::insertOneVideoRecord(const QFileInfo &videoFileinfo)
 
     mDataAnalysisList.push_back(nullptr);
     mFirstSharpImageIndexList.push_back(0);
+
+    insertVideoInfo.collectTime = videoFileinfo.created().toTime_t();
+    insertVideoInfo.videoDuration = duration;
+    insertVideoInfo.absVideoPath = videoAbsPath;
+    insertVideoInfo.pixelSize = 5.6;
+    insertVideoInfo.magnification = 5;
+    insertVideoInfo.fps = fps;
+
+    return true;
+}
+
+bool VideoRecord::insertOneVideoRecord(const VideoInfo &videoInfo)
+{
+    QString videoAbsPath = videoInfo.absVideoPath;
+    if(-1 != mAbsVideoPathList.indexOf(videoAbsPath))
+    {
+        return false;
+    }
+    mAbsVideoPathList.push_back(videoAbsPath);
+
+    int currentRowCount = mUI.videorecord->rowCount();
+    mUI.videorecord->setRowCount(currentRowCount + 1);
+
+    int duration = 0;
+    AcquireVideoInfo(videoAbsPath, nullptr, &duration);
+
+    QTableWidgetItem* pathItem = new QTableWidgetItem;
+    pathItem->setText(videoAbsPath);
+    pathItem->setToolTip(videoAbsPath);
+
+    QTableWidgetItem* durationItem = new QTableWidgetItem;
+    durationItem->setText(QString::number(duration));
+
+    QTableWidgetItem* framerateItem = new QTableWidgetItem;
+    framerateItem->setText(QString::number(videoInfo.fps));
+
+    QTableWidgetItem* pixelSizeItem = new QTableWidgetItem;
+    pixelSizeItem->setText(QString::number(videoInfo.pixelSize));
+
+    QTableWidgetItem* magnificationItem = new QTableWidgetItem;
+    magnificationItem->setText(QString::number(videoInfo.magnification));
+
+    QTableWidgetItem* flowrateItem = new QTableWidgetItem;
+    flowrateItem->setText(videoInfo.fkVesselInfoID.isEmpty() ? QStringLiteral("等待中") : QStringLiteral("历史记录 %1").arg(QDateTime::fromTime_t(videoInfo.analysisFinishTime).toString("yy-MM-dd hh:mm:ss")));
+
+    mUI.videorecord->setItem(currentRowCount, 0, pathItem);
+    mUI.videorecord->setItem(currentRowCount, 1, durationItem);
+    mUI.videorecord->setItem(currentRowCount, 2, framerateItem);
+    mUI.videorecord->setItem(currentRowCount, 3, pixelSizeItem);
+    mUI.videorecord->setItem(currentRowCount, 4, magnificationItem);
+    mUI.videorecord->setItem(currentRowCount, 5, flowrateItem);
+
+    mDataAnalysisList.push_back(nullptr);
+    mFirstSharpImageIndexList.push_back(videoInfo.firstSharpFrameIndex);
+    mPkVideoInfoIDList.push_back(videoInfo.pkVideoInfoID);
+
+    return true;
 }

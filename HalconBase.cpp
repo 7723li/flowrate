@@ -8,9 +8,16 @@ void HalconInterfaceBase::preProcess(const HObject &ImageOri, HObject *ImageGaus
     HTuple Channels, AreaRawRegionConnected;
     HTuple useless, MinArea, MaxArea;
 
-    //convertQImageToHObject(image, &ImageOri);
-
-    GaussFilter(ImageOri, ImageGauss, 7);
+    try
+    {
+        GaussFilter(ImageOri, ImageGauss, 7);
+    }
+    catch (HException &HDevExpDefaultException)
+    {
+        *ImageGauss = ImageOri;
+        GenRegionPoints(RegionUnion, HTuple(), HTuple());
+        return;
+    }
 
     //寻找血管区域 均值滤波+动态阈值
     MeanImage(*ImageGauss, &ImageMean, 43, 43);
@@ -36,7 +43,7 @@ void HalconInterfaceBase::preProcess(const HObject &ImageOri, HObject *ImageGaus
     Union1(RegionConnected, &(*RegionUnion));
 }
 
-void HalconInterfaceBase::getImageSharpness(const HObject &ImageOri, HTuple &sharpness, HTuple &isSharp)
+void HalconInterfaceBase::getImageSharpness(const HObject &ImageOri, HTuple *sharpness, HTuple *isSharp)
 {
     HObject  Rectangle, ImageEmphasize, ImageGauss;
     HObject  ImaAmp, ImaDir, ImageMean, RegionDynThresh;
@@ -47,8 +54,8 @@ void HalconInterfaceBase::getImageSharpness(const HObject &ImageOri, HTuple &sha
     HTuple  Area2, useless, Max, Number, Area;
     HTuple  Area1;
 
-    sharpness = 0;
-    isSharp = false;
+    *sharpness = 0;
+    *isSharp = false;
 
     //计算图像整体的灰度方差
     GetImageSize(ImageOri, &Width, &Height);
@@ -59,7 +66,14 @@ void HalconInterfaceBase::getImageSharpness(const HObject &ImageOri, HTuple &sha
     {
         //根据灰度方差进行对比度强化 如果灰度方差大 说明原来的对比度较高 则强化的程度可以降低 反之亦然
         //强化完成后做一次小型模糊 弱化噪点
-        Emphasize(ImageOri, &ImageEmphasize, 255.0 / Deviation, 255.0 / Deviation, 1);
+        try
+        {
+            Emphasize(ImageOri, &ImageEmphasize, 255.0 / Deviation, 255.0 / Deviation, 1);
+        }
+        catch(...)
+        {
+            return;
+        }
         GaussFilter(ImageEmphasize, &ImageGauss, 3);
 
         //canny计算并提取图像上的边缘
@@ -86,18 +100,18 @@ void HalconInterfaceBase::getImageSharpness(const HObject &ImageOri, HTuple &sha
                 AreaCenter(RegionUnion, &Area, &useless, &useless);
                 AreaCenter(skeleton, &Area1, &useless, &useless);
 
-                if (Area > 0 || Area1 > 0)
+                if (Area > 0 && Area1 > 0)
                 {
-                    sharpness = Area.TupleReal() / Area1.TupleReal();
+                    *sharpness = Area.TupleReal() / Area1.TupleReal();
                 }
                 else
                 {
-                    sharpness= 0;
+                    *sharpness= 0;
                 }
             }
         }
 
-        isSharp = (sharpness >= 1.0);
+        *isSharp = (*sharpness >= 1.0);
     }
 }
 
@@ -110,7 +124,7 @@ void HalconInterfaceBase::imagelistAntishake(HObject ImageList, HObject *RegionV
     HObject  UnionRegionVesselConcatDebug, BorderRegionVesselConcatDebug;
 
     HTuple  Width, Height;
-    HTuple  AreaImage, ImageListNumber, I, AreaRegionVesselRear;
+    HTuple  AreaImage, ImageListNumber, I, AreaRegionVesselPrev, AreaRegionVesselRear;
     HTuple  useless, sharpness, isSharp, MaxIntersectAreaRow;
     HTuple  MaxIntersectAreaCol, HomMat2DPrevToRear, AreaRegionAntiShakeMergeMaskTrans;
 
@@ -123,6 +137,16 @@ void HalconInterfaceBase::imagelistAntishake(HObject ImageList, HObject *RegionV
     GetImageSize(ImagePrev, &Width, &Height);
 
     preProcess(ImagePrev, &ImagePrevGauss, &RegionVesselPrev);
+    AreaCenter(ImagePrev, &AreaRegionVesselPrev, &useless, &useless);
+    if(!(AreaRegionVesselPrev.TupleLength() == 0 || -1 == AreaRegionVesselPrev || 0 == AreaRegionVesselPrev))
+    {
+        getImageSharpness(ImagePrev, &sharpness, &isSharp);
+        if(!!isSharp)
+        {
+            *TupleProcessImageIndex = 0;
+            ++AntiShakeFrameNumber;
+        }
+    }
 
     //防抖后的合并掩膜
     GenRectangle1(&RegionAntiShakeMergeMask, 0, 0, Height, Width);
@@ -154,7 +178,7 @@ void HalconInterfaceBase::imagelistAntishake(HObject ImageList, HObject *RegionV
         }
 
         //不清晰的也不要 next one
-        getImageSharpness(ImageRear, sharpness, isSharp);
+        getImageSharpness(ImageRear, &sharpness, &isSharp);
         if (!isSharp)
         {
             continue;
@@ -166,12 +190,10 @@ void HalconInterfaceBase::imagelistAntishake(HObject ImageList, HObject *RegionV
         VectorAngleToRigid(0, 0, 0, MaxIntersectAreaRow, MaxIntersectAreaCol, 0, &HomMat2DPrevToRear);
 
         //移动掩膜
-        AffineTransRegion(RegionAntiShakeMergeMask, &RegionAntiShakeMergeMaskTrans,
-        HomMat2DPrevToRear, "nearest_neighbor");
+        AffineTransRegion(RegionAntiShakeMergeMask, &RegionAntiShakeMergeMaskTrans, HomMat2DPrevToRear, "nearest_neighbor");
 
         //如果掩膜已经移动得仅剩60%面积 说明抖动过大 不再进行下去
-        AreaCenter(RegionAntiShakeMergeMaskTrans, &AreaRegionAntiShakeMergeMaskTrans,
-        &useless, &useless);
+        AreaCenter(RegionAntiShakeMergeMaskTrans, &AreaRegionAntiShakeMergeMaskTrans, &useless, &useless);
         if (AreaRegionAntiShakeMergeMaskTrans < AreaImage * 0.6)
         {
             break;
@@ -370,8 +392,7 @@ void HalconInterfaceBase::splitVesselRegion(const HObject &RegionVesselConcat, i
     HObject  FillupCenterLineContours, ClosingCenterLineContours;
 
     HTuple  InnerRadiusRegionVesselConcat, Sigma;
-    HTuple  Low, High, NeedUnionContoursCount, NoNeedUnionContoursCount;
-    HTuple  LengthRawCenterLines, I, NumberRawCenterLines;
+    HTuple  Low, High, LengthRawCenterLines, I, NumberRawCenterLines;
     HTuple  RowRawCenterLine, ColRawCenterLine, WidthLeftRawCenterLine;
     HTuple  WidthRightRawCenterLine, MeanWidthLeftRawCenterLine;
     HTuple  MeanWidthRightRawCenterLine, TupleMeanWidthLeftRawCenterLine;
@@ -390,36 +411,19 @@ void HalconInterfaceBase::splitVesselRegion(const HObject &RegionVesselConcat, i
     LinesGauss(ImageRegionVesselConcat, &RawCenterLines, Sigma, Low, High, "light", "true", "parabolic", "true");
 
     //选择长度100及以下的进行合并 大于100的不合并
-    NeedUnionContoursCount = 0;
-    NoNeedUnionContoursCount = 0;
     LengthXld(RawCenterLines, &LengthRawCenterLines);
-
+    GenEmptyObj(&NeedUnionContours);
+    GenEmptyObj(&NoNeedUnionContours);
     for (I = 1; I <= LengthRawCenterLines.TupleLength(); ++I)
     {
         SelectObj(RawCenterLines, &RawCenterLine, I);
         if (LengthRawCenterLines[I-1] <= 100)
         {
-            if (0 != NeedUnionContoursCount)
-            {
-                ConcatObj(NeedUnionContours, RawCenterLine, &NeedUnionContours);
-            }
-            else
-            {
-                NeedUnionContours = RawCenterLine;
-            }
-            NeedUnionContoursCount += 1;
+            ConcatObj(NeedUnionContours, RawCenterLine, &NeedUnionContours);
         }
         else
         {
-            if (0 != NoNeedUnionContoursCount)
-            {
-                ConcatObj(NoNeedUnionContours, RawCenterLine, &NoNeedUnionContours);
-            }
-            else
-            {
-                NoNeedUnionContours = RawCenterLine;
-            }
-            NoNeedUnionContoursCount += 1;
+            ConcatObj(NoNeedUnionContours, RawCenterLine, &NoNeedUnionContours);
         }
     }
 
@@ -435,7 +439,7 @@ void HalconInterfaceBase::splitVesselRegion(const HObject &RegionVesselConcat, i
     }
     catch (...)
     {
-
+        RawCenterLinesCotangential = RawCenterLinesCollinear;
     }
 
     //合并完的和不用合并的组合回来
@@ -857,14 +861,7 @@ void HalconInterfaceBase::calculateFlowrate(HObject ImageGaussConcat, HObject Re
             TrackAreas += TrackArea;
 
             //计算流速所用的帧数 需要考虑由于不清晰造成的跳帧
-            if (I > 1)
-            {
-                TupleGenConst(TrackArea.TupleLength(), HTuple(TupleProcessImageIndex[I-1])-HTuple(TupleProcessImageIndex[I-2]), &TrackAreasCountPlus);
-            }
-            else
-            {
-                TupleGenConst(TrackArea.TupleLength(), HTuple(TupleProcessImageIndex[0]), &TrackAreasCountPlus);
-            }
+            TupleGenConst(TrackArea.TupleLength(), HTuple(TupleProcessImageIndex[I])-HTuple(TupleProcessImageIndex[I-1]), &TrackAreasCountPlus);
 
             TupleFind(TrackArea, 0, &ZeroIndices);
             if (ZeroIndices.TupleLength() > 0 && ZeroIndices != -1)

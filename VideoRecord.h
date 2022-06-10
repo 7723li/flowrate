@@ -15,6 +15,8 @@
 #include "AcquireVideoInfo.h"
 #include "DataAnalysis.h"
 
+#include "DataBase.hpp"
+
 class GenericCameraModule;
 
 class VideoRecord : public QWidget
@@ -56,6 +58,8 @@ protected:
 
     virtual void closeEvent(QCloseEvent* e) override;
 
+    virtual bool eventFilter(QObject* obj, QEvent* e) override;
+
 private slots:
     void slotInitOpenCamera();
 
@@ -69,7 +73,7 @@ private slots:
 
     void slotContinueRecordNumChanged(const QString& number);
 
-    void slotVideoRecordDoubleClick(const QModelIndex &index);
+    void slotEnterDataAnalysis(QTableWidgetItem* videorecordItem);
 
     void slotImportDir();
 
@@ -77,7 +81,7 @@ private slots:
 
     void slotLoopCalcFlowTrack();
 
-    void slotUpdateVesselData(AsyncVesselDataCalculator* asyncVesselDataCalculator);
+    void slotDataAnalysisFinish(AsyncDataAnalyser* asyncDataAnalyser);
 
     void slotExportAllData();
 
@@ -86,9 +90,30 @@ private:
 
     inline void updateRecordTime();
 
-    inline void insertOneVideoRecord();
-
-    inline void insertOneVideoRecord(const QFileInfo& videoFileinfo);
+    /*!
+     * @brief
+     * 录制插入
+     *
+     * @attention
+     * 显示一条视频信息并插入一条到数据库
+     */
+    inline bool insertOneVideoRecord();
+    /*!
+     * @brief
+     * 导入插入
+     *
+     * @attention
+     * 和录制插入相似 有可能导入若干条记录
+     */
+    inline bool insertOneVideoRecord(const QFileInfo& videoFileinfo, VideoInfo& insertVideoInfo);
+    /*!
+     * @brief
+     * 数据库记录插入
+     *
+     * @attention
+     * 除了表格显示无需任何多余操作
+     */
+    inline bool insertOneVideoRecord(const VideoInfo& videoInfo);
 
 private:
     Ui_VideoRecord mUI;
@@ -106,7 +131,7 @@ private:
 
     QDateTime mUsingCameraCaptureBeginDateTime;     // 相机开始采集的日期时间
     QDateTime mUsingCameraCaptureFinishDateTime;    // 相机停止采集的日期时间
-    QTime mCameraRunTime;						// 相机运行时长
+    QTime mCameraRunTime;                           // 相机运行时长
 
     int mFrameWidth;                                // 宽
     int mFrameHeight;                               // 高
@@ -146,11 +171,13 @@ private:
 
     QTimer mAutoRecordTimeLimitTimer;               // 智能录制时长显示定时器 1000ms
 
+    QList<QString> mAbsVideoPathList;               // 绝对视频路径列表
+    QList<QString> mPkVideoInfoIDList;              // 视频信息的主键列表
     QList<DataAnalysis*> mDataAnalysisList;         // 数据分析界面列表
     QList<int> mFirstSharpImageIndexList;           // 数据分析界面对应的清晰首帧
 
     int mFlowTrackCalculatingNumer;                 // 正在计算流速的线程数量
     QTimer mLoopCalcFlowTrackTimer;                 // 循环检查流速计算的定时去 1000ms
-    QMap<AsyncVesselDataCalculator*, int> mMapFlowTrackThreadToRowIndex;    // 计算流速的线程 对应到 视频记录行号
-    QMap<int, VesselData> mMapVideoRecordRowToFlowtrackArea;                // 视频记录行号 对应到 流动轨迹面积
+    QMap<AsyncDataAnalyser*, int> mMapDataAnalyserToRowIndex;   // 计算流速的线程 对应到 视频记录行号
+    QMap<int, QString> mMapVideoRecordRowToPkVesselInfoID;      // 视频记录行号 对应到 血管信息主键
 };

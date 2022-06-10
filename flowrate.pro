@@ -1,6 +1,6 @@
 QT       += core gui
 
-greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+greaterThan(QT_MAJOR_VERSION, 4): QT += widgets sql
 
 CONFIG += c++11
 
@@ -26,7 +26,6 @@ INCLUDEPATH += \
     $$PWD/libs/opencv/include/ \
     $$PWD/libs/opencv/include/opencv2/ \
     $$PWD/libs/ffmpeg/include/ \
-    $$PWD/libs/sqlite/include/ \
 
 SOURCES += \
     $$PWD/AcquireVideoInfo.cpp \
@@ -55,6 +54,8 @@ HEADERS += \
     $$PWD/AsyncProcesser.h \
     $$PWD/HalconBase.h \
     $$PWD/VesselAlgorithm.h \
+    $$PWD/CommonDataStruct.h \
+    $$PWD/DataBase.hpp \
 
 FORMS += \
     $$PWD/CameraParamWidget.ui \
@@ -67,7 +68,6 @@ LIBS += \
     $$PWD/libs/HALCON/lib/*.lib \
     $$PWD/libs/opencv/lib/*.lib \
     $$PWD/libs/ffmpeg/lib/*.lib \
-    $$PWD/libs/sqlite/lib/*.lib \
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

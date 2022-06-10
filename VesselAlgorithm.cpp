@@ -6,7 +6,7 @@ void VesselAlgorithm::getImageSharpness(const QImage &image, double &sharpness, 
     HTuple tSharpness, tIsSharp;
 
     convertQImageToHObject(image, &ImageOri);
-    HalconInterfaceBase::getImageSharpness(ImageOri, tSharpness, tIsSharp);
+    HalconInterfaceBase::getImageSharpness(ImageOri, &tSharpness, &tIsSharp);
 
     sharpness = tSharpness.TupleReal();
     isSharp = (tIsSharp != 0);
@@ -205,7 +205,7 @@ void VesselAlgorithm::calculateFlowrate(const QVector<QImage> &imagelist, double
     }
 }
 
-void VesselAlgorithm::calculateAll(const QVector<QImage> &imagelist, double pixelSize, int magnification, double fps, VesselData &vesselData, int& firstSharpImageIndex)
+void VesselAlgorithm::calculateAll(const QVector<QImage> &imagelist, double pixelSize, int magnification, double fps, VesselInfo &vesselInfo, int& firstSharpImageIndex)
 {
     /*!
      * @brief  血管信息提取/糖萼算法/流速算法程序结构
@@ -279,14 +279,14 @@ void VesselAlgorithm::calculateAll(const QVector<QImage> &imagelist, double pixe
     HalconInterfaceBase::calculateFlowrate(ImageGaussConcat, RegionVesselSplited, NumberCenterLines, TupleProcessImageIndex, TupleTranPrevToRearRows, TupleTranPrevToRearCols, pixelSize, magnification, fps, &tFlowrates);
 
     // 打完收工
-    VesselData tVesselData;
+    VesselInfo tVesselInfo;
 
-    tVesselData.vesselNumber = NumberCenterLines;
+    tVesselInfo.vesselNumber = NumberCenterLines;
 
     for(int i = 0; i < NumberCenterLines; ++i)
     {
-        tVesselData.diameters.push_back(vesselDiameters[i] * pixelSize / magnification);
-        tVesselData.lengths.push_back(vesselLengts[i] * pixelSize / magnification);
+        tVesselInfo.diameters.push_back(vesselDiameters[i] * pixelSize / magnification);
+        tVesselInfo.lengths.push_back(vesselLengts[i] * pixelSize / magnification);
     }
 
     for(int i = 0; i < NumberCenterLines; ++i)
@@ -300,7 +300,7 @@ void VesselAlgorithm::calculateAll(const QVector<QImage> &imagelist, double pixe
         {
             rp.push_back(QPoint(Cols[j], Rows[j]));
         }
-        tVesselData.regionsUnionPoints.push_back(rp);
+        tVesselInfo.regionsUnionPoints.push_back(rp);
     }
 
     for(int i = 0; i < NumberCenterLines; ++i)
@@ -315,7 +315,7 @@ void VesselAlgorithm::calculateAll(const QVector<QImage> &imagelist, double pixe
         {
             rp.push_back(QPoint(Cols[j], Rows[j]));
         }
-        tVesselData.regionsSkeletonPoints.push_back(rp);
+        tVesselInfo.regionsSkeletonPoints.push_back(rp);
     }
 
     for(int i = 0; i < NumberCenterLines; ++i)
@@ -333,18 +333,18 @@ void VesselAlgorithm::calculateAll(const QVector<QImage> &imagelist, double pixe
                 rp.push_back(QPoint(Cols[k], Rows[k]));
             }
         }
-        tVesselData.regionsBorderPoints.push_back(rp);
+        tVesselInfo.regionsBorderPoints.push_back(rp);
     }
 
     for(int i = 0; i < NumberCenterLines; ++i)
     {
-        tVesselData.glycocalyx.push_back(tGlycocalyx[i]);
+        tVesselInfo.glycocalyx.push_back(tGlycocalyx[i]);
     }
 
     for(int i = 0; i < NumberCenterLines; ++i)
     {
-        tVesselData.flowrates.push_back(tFlowrates[i]);
+        tVesselInfo.flowrates.push_back(tFlowrates[i]);
     }
 
-    vesselData = tVesselData;
+    vesselInfo = tVesselInfo;
 }

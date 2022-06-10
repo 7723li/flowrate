@@ -32,7 +32,7 @@ public:
 
     void setFirstSharpImageIndex(int firstSharpImageIndex);
 
-    void updateVesselData(const VesselData& vesselData);
+    void updateVesselInfo(VesselInfo& vesselInfo);
 
 protected:
     virtual void closeEvent(QCloseEvent* e) override;
@@ -56,7 +56,7 @@ private:
 
     QVector<QImage> mImageList;                 // 图像序列
 
-    const VesselData* mVesselData;              // 血管数据
+    VesselInfo mVesselInfo;                     // 血管数据
 
     DADataDisplayScene* mDADataDisplayScene;    // 流速场景
     //DAVesselGraphScene* mDAVesselGraphScene;  // 描记场景
