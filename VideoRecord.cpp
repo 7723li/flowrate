@@ -731,6 +731,7 @@ void VideoRecord::slotLoopCalcFlowTrack()
                 AcquireVideoInfo(path, &imagelist);
                 if(imagelist.size() < 2)
                 {
+                    mUI.videorecord->item(rowIndex, 5)->setText(QStringLiteral("视频不存在或已损坏"));
                     continue;
                 }
 
