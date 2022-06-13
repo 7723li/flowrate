@@ -108,3 +108,28 @@ private:
 
     QEventLoop mEventLoop;
 };
+
+/*!
+ * @brief
+ * 异步清晰度计算线程
+ */
+class AsyncSharpnessCalculator : public QThread
+{
+    Q_OBJECT
+
+public:
+    explicit AsyncSharpnessCalculator(QObject* p = nullptr);
+    virtual ~AsyncSharpnessCalculator() override;
+
+    void cache(QImage& image);
+
+protected:
+    virtual void run() override;
+
+signals:
+    void signalCalcSharpnessFinish(double sharpness, bool isSharp);
+
+private:
+    QImage mImage;
+};
+

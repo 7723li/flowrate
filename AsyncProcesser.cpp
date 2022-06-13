@@ -126,3 +126,51 @@ void AsyncDataAnalyser::run()
     emit signalUpdateTrackArea(this);
 }
 /**********AsyncFlowTrackAreaCalculator**********/
+
+/**********AsyncSharpnessCalculator**********/
+AsyncSharpnessCalculator::AsyncSharpnessCalculator(QObject *p):
+    QThread(p)
+{
+
+}
+
+AsyncSharpnessCalculator::~AsyncSharpnessCalculator()
+{
+    QEventLoop eventLoop;
+
+    auto lambdaSlotCheckRecordFinish = [&](){
+        if (!this->isRunning())
+        {
+            this->quit();
+            QTimer::singleShot(0, &eventLoop, &QEventLoop::quit);
+        }
+    };
+
+    QTimer timerCheckRecordFinish;
+    connect(&timerCheckRecordFinish, &QTimer::timeout, lambdaSlotCheckRecordFinish);
+
+    timerCheckRecordFinish.start(10);
+    eventLoop.exec();
+}
+
+void AsyncSharpnessCalculator::cache(QImage &image)
+{
+    if(this->isRunning())
+    {
+        return;
+    }
+
+    mImage = std::move(image);
+    this->start();
+}
+
+void AsyncSharpnessCalculator::run()
+{
+    double sharpness = 0.0;
+    bool isSharp = false;
+
+    VesselAlgorithm::getImageSharpness(mImage, sharpness, isSharp);
+
+    emit signalCalcSharpnessFinish(sharpness, isSharp);
+}
+/**********AsyncSharpnessCalculator**********/

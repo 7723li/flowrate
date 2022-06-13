@@ -61,13 +61,37 @@ protected:
     virtual bool eventFilter(QObject* obj, QEvent* e) override;
 
 private slots:
+    /*!
+     * @brief slotInitOpenCamera
+     * 软件启动时开启相机
+     */
     void slotInitOpenCamera();
 
+    /*!
+     * @brief
+     * 相机列表刷新完毕
+     *
+     * @param cameraCount 已连接的相机数量
+     */
     void slotAfterUpdateAvaliableCameras(int cameraCount);
 
+    /*!
+     * @brief
+     * 刷新显示的帧率 并 顺便检查相机连接装
+     */
     void slotRefreshFramerate();
 
+    /*!
+     * @brief
+     * 定时缓存一帧到清晰度线程
+     */
     void slotCalcSharpness();
+
+    /*!
+     * @brief slotDisplaySharpnessAndAutoRecord
+     * 清晰度计算完成后 显示清晰度 并 在需要时开始自动录制
+     */
+    void slotDisplaySharpnessAndAutoRecord(double sharpness, bool isSharp);
 
     void slotAutoRecordChecked(int status);
 
@@ -79,13 +103,29 @@ private slots:
 
     void slotCloseVideoFramePlayer(DataAnalysis* videoFramePlayer);
 
-    void slotLoopCalcFlowTrack();
+    /*!
+     * @brief
+     * 定时检查计算录制视频列表的图像算法数据
+     */
+    void slotLoopCheckDataAnalysis();
 
+    /*!
+     * @brief
+     * 一个视频的数据计算完毕
+     */
     void slotDataAnalysisFinish(AsyncDataAnalyser* asyncDataAnalyser);
 
+    /*!
+     * @brief
+     * 导出所有数据
+     */
     void slotExportAllData();
 
 private:
+    /*!
+     * @brief
+     * 没有相机连接时 循环检查相机列表
+     */
     inline void asyncUpdateAvaliableCameras();
 
     inline void updateRecordTime();
@@ -165,6 +205,7 @@ private:
     bool mIsUpdatingCameraList;                     // 是否正在更新相机列表
     bool mShowDebugMessage;                         // 显示调试信息
 
+    AsyncSharpnessCalculator mSharpnseeCalculator;  // 异步清晰度计算线程
     QTimer mSharpnessTimer;                         // 清晰度计算定时器 25ms
     int mContinueSharpFrameCount;                   // 连续清晰的帧数
     int mContinueRecordVideoCount;                  // 连续录制的视频数

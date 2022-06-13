@@ -43,17 +43,18 @@ VideoRecord::VideoRecord(QWidget *parent)
 
     mSharpnessTimer.setInterval(25);
     connect(&mSharpnessTimer, &QTimer::timeout, this, &VideoRecord::slotCalcSharpness);
+    connect(&mSharpnseeCalculator, &AsyncSharpnessCalculator::signalCalcSharpnessFinish, this, &VideoRecord::slotDisplaySharpnessAndAutoRecord);
 
     mRecordTimeLimitTimer.setInterval(60 * 60 * 1000);
     mRecordTimeLimitTimer.setSingleShot(true);
     connect(&mRecordTimeLimitTimer, &QTimer::timeout, this, &VideoRecord::stopRecord);
 
-    mAutoRecordTimeLimitTimer.setInterval(1000);
+    mAutoRecordTimeLimitTimer.setInterval(1100);
     mAutoRecordTimeLimitTimer.setSingleShot(true);
     connect(&mAutoRecordTimeLimitTimer, &QTimer::timeout, this, &VideoRecord::stopRecord);
 
     mLoopCalcFlowTrackTimer.setInterval(1000);
-    connect(&mLoopCalcFlowTrackTimer, &QTimer::timeout, this, &VideoRecord::slotLoopCalcFlowTrack);
+    connect(&mLoopCalcFlowTrackTimer, &QTimer::timeout, this, &VideoRecord::slotLoopCheckDataAnalysis);
     mLoopCalcFlowTrackTimer.start();
 
     {
@@ -519,12 +520,13 @@ void VideoRecord::slotRefreshFramerate()
 
 void VideoRecord::slotCalcSharpness()
 {
-    static const QString tips[] = {QStringLiteral("是"), QStringLiteral("否")};
-
     QImage image = mRecvImage;
-    double sharpness = 0.0;
-    bool isSharp = false;
-    VesselAlgorithm::getImageSharpness(image, sharpness, isSharp);
+    mSharpnseeCalculator.cache(image);
+}
+
+void VideoRecord::slotDisplaySharpnessAndAutoRecord(double sharpness, bool isSharp)
+{
+    static const QString tips[] = {QStringLiteral("是"), QStringLiteral("否")};
 
     mUI.sharpness->setText(QString::number(sharpness, 'g', 3));
     if(isSharp)
@@ -717,7 +719,7 @@ void VideoRecord::slotCloseVideoFramePlayer(DataAnalysis *videoFramePlayer)
     }
 }
 
-void VideoRecord::slotLoopCalcFlowTrack()
+void VideoRecord::slotLoopCheckDataAnalysis()
 {
     int rowCount = mUI.videorecord->rowCount();
     for(int rowIndex = 0; rowIndex < rowCount; ++rowIndex)
@@ -909,7 +911,7 @@ bool VideoRecord::insertOneVideoRecord()
     pathItem->setToolTip(videoAbsPath);
 
     QTableWidgetItem* durationItem = new QTableWidgetItem;
-    durationItem->setText(mUI.video_time_display->text());
+    durationItem->setText(QString::number(mRecordDuratiom.hour() * 3600 + mRecordDuratiom.minute() * 60 + mRecordDuratiom.second()));
 
     QTableWidgetItem* framerateItem = new QTableWidgetItem;
     framerateItem->setText(QString::number(mConfigFramerate));
