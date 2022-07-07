@@ -2,7 +2,7 @@
 
 DAVesselGraphSceneWidget::DAVesselGraphSceneWidget(Ui_DataAnalysis &ui, const QVector<QImage> &imagelist, QWidget *parent) :
     QWidget(parent), mUI(ui), mImageList(imagelist), mCtrlPressing(false), mScale(1.0), mChoosenVesselIndex(-1),
-    mChoosenVesselInfoRowItem(nullptr), mUserMotionStatus(UserMotionStatus::None), mErasedSomething(false), mAsyncDataReanalyser(nullptr)
+    mChoosenVesselInfoRowItem(nullptr), mUserMotionStatus(UserMotionStatus::None), mErasedSomething(false), mAsyncDataReanalyser(nullptr), mIsSaving(false)
 {
     mVesselPanel = new QWidget(nullptr);
     mVesselPanel->setWindowFlags(Qt::WindowType::FramelessWindowHint);
