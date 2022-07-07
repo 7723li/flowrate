@@ -69,6 +69,12 @@ private slots:
 
     /*!
      * @brief
+     * 软件启动时加载历史录制信息
+     */
+    void slotLoadVideoInfos();
+
+    /*!
+     * @brief
      * 相机列表刷新完毕
      *
      * @param cameraCount 已连接的相机数量

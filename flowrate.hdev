@@ -53,7 +53,7 @@
 <l>    endif</l>
 <l>endif</l>
 <c></c>
-<c>***************************************消抖+提取完整血管区域***************************************</c>
+<c>***************************************消抖***************************************</c>
 <c>* 防抖需要帧数</c>
 <c>* 完整血管区域 前10帧</c>
 <c>* 糖萼计算     前10帧和后40帧</c>
@@ -74,14 +74,15 @@
 <c>***************************************血管区域分段***************************************</c>
 <c>* 将完整的血管区域移动回跟首帧重叠</c>
 <l>align_antishake_region (RegionVesselConcat, RegionAlignVesselConcat, 1, 10, TupleTranPrevToRearRows, TupleTranPrevToRearCols, 'region')</l>
-<c></c>
-<c>* 判断中心线数量</c>
 <l>union1(RegionAlignVesselConcat, UnionRegionVessel)</l>
+<c></c>
+<c>* 血管区域图形分段</c>
 <l>split_vessel_region (UnionRegionVessel, CenterLines, RegionVesselSplited, CenterLineContours, Width, Height, NumberCenterLines, VesselDiameters, VesselLengths)</l>
 <l>if(NumberCenterLines==0)</l>
 <l>    disp_message(WindowHandle, 'There is no available blood vessel!', 'window', Height/2, Width/2, 'black', 'true')</l>
 <l>    return()</l>
 <l>endif</l>
+<c></c>
 <c></c>
 <c>***************************************糖萼***************************************</c>
 <l>calculate_glycocalyx (CenterLines, RegionVesselConcat, NumberCenterLines, TupleTranPrevToRearRows, TupleTranPrevToRearCols, 5.6, 5, glycocalyx)</l>
@@ -89,6 +90,19 @@
 <c>***************************************流速***************************************</c>
 <l>calculate_flowrate (ImageGaussConcat, RegionVesselSplited, NumberCenterLines, TupleProcessImageIndex, TupleTranPrevToRearRows, TupleTranPrevToRearCols, 5.6, 5, 30, Flowrate)</l>
 <c></c>
+<l>select_obj(CenterLines, ObjectSelected, 25)</l>
+<l>get_contour_xld(ObjectSelected, Row, Col)</l>
+<l>gen_region_polygon(Region, Row, Col)</l>
+<c></c>
+<l>gen_image_const(Image, 'byte', Width, Height)</l>
+<l>overpaint_region(Image, Region, 255, 'fill')</l>
+<l>calculate_lines_gauss_parameters(1, 255, Sigma, Low, High)</l>
+<l>lines_gauss(Image, Lines, Sigma, Low, High, 'light', 'true', 'parabolic', 'true')</l>
+<c></c>
+<l>union_adjacent_contours_xld(Lines, UnionContours, 1, 1, 'attr_keep')</l>
+<c></c>
+<l>length_xld(UnionContours, Length)</l>
+<l>tuple_sum(Length, Sum)</l>
 <c>***************************************调试显示***************************************</c>
 <c></c>
 <l>if(debug or pathloop)</l>
@@ -1828,8 +1842,8 @@
 <l>    gen_contour_polygon_xld(RealContourRight, RealRowR, RealColR)</l>
 <c>    </c>
 <c>    * 生成左右轮廓区域</c>
-<l>    gen_region_polygon(RegionCenterLineLeft, RealRowL, RealColL)</l>
-<l>    gen_region_polygon(RegionCenterLineRight, RealRowR, RealColR)</l>
+<l>    gen_region_points(RegionCenterLineLeft, RealRowL, RealColL)</l>
+<l>    gen_region_points(RegionCenterLineRight, RealRowR, RealColR)</l>
 <c>    </c>
 <c>    * 封闭左右轮廓区域 封闭失败的中心线过滤掉</c>
 <l>    try</l>
@@ -1906,9 +1920,9 @@
 <l>    select_obj (RegionOrigin, RegionAntishaked, BeginFrame)</l>
 <c>    </c>
 <c>    * 防抖后的合并掩膜</c>
-<l>    region_features(RegionAntishaked, 'width', Width)</l>
-<l>    region_features(RegionAntishaked, 'height', Height)</l>
-<l>    gen_rectangle1(RegionAntiShakeMergeMask, 0, 0, Height, Width)</l>
+<l>    union1(RegionAntishaked, UnionRegionAntishaked)</l>
+<l>    smallest_rectangle1(UnionRegionAntishaked, Row1, Column1, Row2, Column2)</l>
+<l>    gen_rectangle1(RegionAntiShakeMergeMask, Row1, Column1, Row2, Column2)</l>
 <c>    </c>
 <l>    for I := BeginFrame+1 to EndFrame by 1</l>
 <l>        vector_angle_to_rigid (0, 0, 0, -TupleTranPrevToRearRows[I-2], -TupleTranPrevToRearCols[I-2], 0, HomMat2DRearToPrev)</l>
@@ -1980,8 +1994,12 @@
 <c>       </c>
 <c>    * 获取单条血管的位置/角度/</c>
 <l>    get_contour_xld(CenterLine, Row, Col)</l>
-<c>     </c>
-<l>    get_contour_attrib_xld(CenterLine, 'angle', Attrib)</l>
+<c>    </c>
+<l>    try</l>
+<l>        get_contour_attrib_xld(CenterLine, 'angle', Attrib)</l>
+<l>    catch (Exception)</l>
+<l>        get_contour_angle_xld(CenterLine, 'abs', 'mean', 3, Attrib)</l>
+<l>    endtry</l>
 <l>    gen_empty_obj(VesselLine)</l>
 <c>    </c>
 <l>    get_contour_attrib_xld(CenterLine, 'width_right', WidthR)   </l>

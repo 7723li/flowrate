@@ -1,25 +1,37 @@
 ﻿#include "DataAnalysis.h"
 
 DataAnalysis::DataAnalysis(double fps, QWidget *p):
-    QWidget(p), mGifPlayer(new GifPlayer(mImageList, fps, nullptr))
+    QWidget(p), mGifPlayer(new GifPlayer(mImageList, nullptr))
 {
     mUI.setupUi(this);
+    mUI.sceneWidgetScrollArea->setAlignment(Qt::AlignmentFlag::AlignCenter);
+    mUI.stackedWidget->setCurrentWidget(mUI.pageDataDisplay);
 
-    mGifPlayer->resize(656, 492);
+    QWidget* useless = mUI.sceneWidgetScrollArea->takeWidget();
+    delete useless;
+    useless = nullptr;
+    mUI.scrollAreaWidgetContents = nullptr;
 
     connect(mUI.showGif, &QPushButton::clicked, mGifPlayer, &QWidget::show);
     connect(mUI.exportData, &QPushButton::clicked, this, &DataAnalysis::slotExportData);
     connect(mUI.dataDisplay, &QPushButton::clicked, this, &DataAnalysis::slotSwithDataDisplay);
     connect(mUI.vesselGraph, &QPushButton::clicked, this, &DataAnalysis::slotSwitchVesselGraph);
+    connect(mUI.dataDisplayList, &QTableWidget::doubleClicked, this, &DataAnalysis::slotDataDisplayListDoubleClick);
 
-    mDADataDisplayScene = new DADataDisplayScene(mUI, mImageList, nullptr);
-    mUI.view->setScene(mDADataDisplayScene);
+    mGifPlayer->resize(656, 492);
 
-    //mDAVesselGraphScene = new DAVesselGraphScene(mUI, mImageList, nullptr);
+    mDADataDisplaySceneWidget = new DADataDisplaySceneWidget(mUI, mImageList, nullptr);
+    mUI.sceneWidgetScrollArea->setWidget(mDADataDisplaySceneWidget);
+    mDADataDisplaySceneWidget->setGeometry(0, 0, 656, 492);
 
-    this->setFocus(Qt::FocusReason::NoFocusReason);
-    mUI.view->setFocus();
-    mUI.view->setSceneRect(0, 0, 656, 492);
+    mDAVesselGraphSceneWidget = new DAVesselGraphSceneWidget(mUI, mImageList, nullptr);
+    connect(mDAVesselGraphSceneWidget, &DAVesselGraphSceneWidget::signalUpdateVesselInfo, this, &DataAnalysis::updateVesselInfo);
+
+    this->setFocusPolicy(Qt::FocusPolicy::NoFocus);
+    mDADataDisplaySceneWidget->setFocusPolicy(Qt::FocusPolicy::StrongFocus);
+    mDADataDisplaySceneWidget->setFocus(Qt::FocusReason::MouseFocusReason);
+    mDAVesselGraphSceneWidget->setFocusPolicy(Qt::FocusPolicy::StrongFocus);
+    mDAVesselGraphSceneWidget->setFocus(Qt::FocusReason::MouseFocusReason);
 }
 
 DataAnalysis::~DataAnalysis()
@@ -27,33 +39,53 @@ DataAnalysis::~DataAnalysis()
     delete mGifPlayer;
     mGifPlayer = nullptr;
 
-    delete mDADataDisplayScene;
-    mDADataDisplayScene = nullptr;
+    delete mDADataDisplaySceneWidget;
+    mDADataDisplaySceneWidget = nullptr;
+
+    delete mDAVesselGraphSceneWidget;
+    mDAVesselGraphSceneWidget = nullptr;
 }
 
-void DataAnalysis::setVideoAbsPath(const QString &videoAbsPath)
+void DataAnalysis::setVideoInfoMation(const QString &videoAbsPath, double pixelSize, int magnification, double fps)
 {
+    mUI.videoAbsPath->setText(videoAbsPath);
+    mUI.videoAbsPath->setToolTip(videoAbsPath);
+    mUI.fps->setNum(fps);
+    mUI.pixelsize->setNum(pixelSize);
+    mUI.magnification->setNum(magnification);
+
+    mGifPlayer->setFps(fps);
+
     mVideoFileInfo = videoAbsPath;
     mGifPlayer->setWindowTitle(videoAbsPath);
-    mDADataDisplayScene->setVideoAbsPath(videoAbsPath);
+    mDADataDisplaySceneWidget->setVideoAbsPath(videoAbsPath);
 }
 
 void DataAnalysis::setImageList(QVector<QImage>& imagelist)
 {
     mImageList = std::move(imagelist);
 
-    mDADataDisplayScene->updateFrameCount(mImageList.size());
+    mDADataDisplaySceneWidget->updateFrameCount(mImageList.size());
+
+    if(!mImageList.empty())
+    {
+        mUI.imagesize->setText(QString("(%1, %2)").arg(mImageList.front().width()).arg(mImageList.front().height()));
+        mDADataDisplaySceneWidget->setGeometry(0, 0, mImageList.front().width(), mImageList.front().height());
+        mDAVesselGraphSceneWidget->setGeometry(0, 0, mImageList.front().width(), mImageList.front().height());
+    }
 }
 
 void DataAnalysis::setFirstSharpImageIndex(int firstSharpImageIndex)
 {
-    mDADataDisplayScene->setFirstSharpImageIndex(firstSharpImageIndex);
+    mDADataDisplaySceneWidget->setFirstSharpImageIndex(firstSharpImageIndex);
+    mDAVesselGraphSceneWidget->setFirstSharpImageIndex(firstSharpImageIndex);
 }
 
 void DataAnalysis::updateVesselInfo(VesselInfo &vesselInfo)
 {
     mVesselInfo = vesselInfo;
-    mDADataDisplayScene->updateVesselInfo(mVesselInfo);
+    mDADataDisplaySceneWidget->updateVesselInfo(mVesselInfo);
+    mDAVesselGraphSceneWidget->updateVesselInfo(mVesselInfo);
 
     mUI.dataDisplayList->setRowCount(mVesselInfo.vesselNumber);
     for(int i = 0; i < mVesselInfo.vesselNumber; ++i)
@@ -78,6 +110,22 @@ void DataAnalysis::updateVesselInfo(VesselInfo &vesselInfo)
 
 void DataAnalysis::closeEvent(QCloseEvent *e)
 {
+    if(mDAVesselGraphSceneWidget->isSaving())
+    {
+        QMessageBox messageBox(QMessageBox::Icon::Warning, QStringLiteral("警告"), QStringLiteral("正在更新保存中 现在关闭会丢失未保存的操作"),
+                               QMessageBox::StandardButton::Ok | QMessageBox::StandardButton::No, nullptr);
+        messageBox.button(QMessageBox::StandardButton::Ok)->setText(QStringLiteral("依然退出"));
+        messageBox.button(QMessageBox::StandardButton::No)->setText(QStringLiteral("先等一等"));
+        messageBox.setDefaultButton(QMessageBox::StandardButton::No);
+        messageBox.setWindowIcon(QIcon(":/icons/image/icon.ico"));
+        int button = messageBox.exec();
+        if(button != QMessageBox::Ok)
+        {
+            e->ignore();
+            return;
+        }
+    }
+
     e->accept();
 
     this->hide();
@@ -88,9 +136,7 @@ void DataAnalysis::closeEvent(QCloseEvent *e)
 void DataAnalysis::slotExportData()
 {
     QDir currentDir(QDir::current());
-
     currentDir.cdUp();
-
     if(currentDir.exists("data"))
     {
         currentDir.cd("data");
@@ -147,11 +193,19 @@ void DataAnalysis::slotExportData()
 
 void DataAnalysis::slotSwithDataDisplay()
 {
-    mUI.view->setScene(mDADataDisplayScene);
+    mUI.stackedWidget->setCurrentWidget(mUI.pageDataDisplay);
+    mUI.sceneWidgetScrollArea->takeWidget();
+    mUI.sceneWidgetScrollArea->setWidget(mDADataDisplaySceneWidget);
 }
 
 void DataAnalysis::slotSwitchVesselGraph()
 {
-    //mUI.view->setScene(mDAVesselGraphScene);
+    mUI.stackedWidget->setCurrentWidget(mUI.pageVesselGraph);
+    mUI.sceneWidgetScrollArea->takeWidget();
+    mUI.sceneWidgetScrollArea->setWidget(mDAVesselGraphSceneWidget);
 }
 
+void DataAnalysis::slotDataDisplayListDoubleClick(const QModelIndex &index)
+{
+    return;
+}

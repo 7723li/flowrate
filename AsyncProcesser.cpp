@@ -174,3 +174,28 @@ void AsyncSharpnessCalculator::run()
     emit signalCalcSharpnessFinish(sharpness, isSharp);
 }
 /**********AsyncSharpnessCalculator**********/
+
+/**********AsyncDataReanalyser**********/
+AsyncDataReanalyser::AsyncDataReanalyser(const QVector<QImage> &imagelist, double fps, double pixelSize, int magnification, const QVector<int>& erasedOriVesselIndex, const VesselInfo &oriVesselInfo):
+    mImagelist(imagelist), mFps(fps), mPixelSize(pixelSize), mMagnification(magnification), mErasedOriVesselIndex(erasedOriVesselIndex), mOriVesselInfo(oriVesselInfo)
+{
+
+}
+
+AsyncDataReanalyser::~AsyncDataReanalyser()
+{
+
+}
+
+VesselInfo &AsyncDataReanalyser::getNewVesselInfo()
+{
+    return mNewVesselInfo;
+}
+
+void AsyncDataReanalyser::run()
+{
+    VesselAlgorithm::reCalculateAll(mImagelist, mPixelSize, mMagnification, mFps, mErasedOriVesselIndex, mOriVesselInfo, mNewVesselInfo);
+
+    emit signalReanalysisFinished();
+}
+/**********AsyncDataReanalyser**********/

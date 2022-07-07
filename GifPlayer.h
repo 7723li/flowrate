@@ -15,8 +15,11 @@ class GifPlayer : public QOpenGLWidget
     Q_OBJECT
 
 public:
-    explicit GifPlayer(const QVector<QImage>& imagelist, double fps, QWidget* p = nullptr);
+    explicit GifPlayer(const QVector<QImage>& imagelist, QWidget* p = nullptr);
     virtual ~GifPlayer();
+
+public slots:
+    void setFps(double fps);
 
 protected:
     virtual void showEvent(QShowEvent* e) override;
@@ -31,6 +34,7 @@ protected slots:
 private:
     const QVector<QImage>& mImagelist;
     int mCurrentIndex;
+    QImage mShowimage;
 
     QTimer mGifTimer;           // 动图播放定时器
     QPushButton mGifPlayButton; // 动图播放状态切换按钮

@@ -17,9 +17,7 @@ public:
     DataBase()
     {
         QDir currentDir(QDir::current());
-
         currentDir.cdUp();
-
         if(currentDir.exists("data"))
         {
             currentDir.cd("data");
@@ -71,7 +69,10 @@ public:
                       "firstSharpFrameIndex, analysisFinishTime) values('%1', '%2', %3, %4, '%5', %6, %7, %8, %9, %10)";
         QSqlQuery query(mDb);
 
-        videoInfo.pkVideoInfoID = generateGuid();
+        if(videoInfo.pkVideoInfoID.isEmpty())
+        {
+            videoInfo.pkVideoInfoID = generateGuid();
+        }
         sql = sql.arg(videoInfo.pkVideoInfoID).arg(videoInfo.fkVesselInfoID).arg(videoInfo.collectTime).arg(videoInfo.videoDuration).arg(videoInfo.absVideoPath)
                 .arg(videoInfo.pixelSize).arg(videoInfo.magnification).arg(videoInfo.fps).arg(videoInfo.firstSharpFrameIndex).arg(videoInfo.analysisFinishTime);
 
@@ -153,6 +154,11 @@ public:
 
     bool updateVideoInfo(const VideoInfo& videoInfo)
     {
+        if(videoInfo.pkVideoInfoID.isEmpty())
+        {
+            return false;
+        }
+
         QString sql = "update TableVideoInfo set fkVesselInfoID='%1', collectTime=%2, videoDuration=%3, absVideoPath='%4', pixelSize=%5, magnification=%6, fps=%7, "
                       "firstSharpFrameIndex=%8, analysisFinishTime=%9 where pkVideoInfoID='%10'";
         QSqlQuery query(mDb);
@@ -200,7 +206,10 @@ public:
         QString sql = "insert into TableVesselInfo values (:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12);";
         QSqlQuery query(mDb);
 
-        vesselInfo.pkVesselInfoID = generateGuid();
+        if(vesselInfo.pkVesselInfoID.isEmpty())
+        {
+            vesselInfo.pkVesselInfoID = generateGuid();
+        }
 
         query.prepare(sql);
         query.bindValue(":1", vesselInfo.pkVesselInfoID);
@@ -233,8 +242,6 @@ public:
 
         return query.exec();
     }
-
-    //bool insertVesselInfo(const )
 
     bool selectVesselInfo(QVector<VesselInfo>& vesselInfoList)
     {
@@ -270,6 +277,39 @@ public:
         }
 
         return false;
+    }
+
+    bool updateVesselInfo(const VesselInfo& vesselInfo)
+    {
+        if(vesselInfo.pkVesselInfoID.isEmpty())
+        {
+            return false;
+        }
+
+        if(!deleteVesselInfo(vesselInfo))
+        {
+            return false;
+        }
+        VesselInfo tVesselInfo(vesselInfo);
+        if(!insertVesselInfo(tVesselInfo))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    bool deleteVesselInfo(const VesselInfo& vesselInfo)
+    {
+        if(vesselInfo.pkVesselInfoID.isEmpty())
+        {
+            return false;
+        }
+
+        QString sql = "delete from TableVesselInfo where pkVesselInfoID='%1';";
+        QSqlQuery query(mDb);
+        sql = sql.arg(vesselInfo.pkVesselInfoID);
+        return query.exec(sql);
     }
 
 private:
@@ -339,12 +379,17 @@ private:
         for(int i = 0; i < vesselInfo.vesselNumber; ++i)
         {
             vesselInfo.regionsSkeletonPoints.push_back(dbSkeletonPoints.mid(posSkeleton, skelegonPointsCount[i]));
-            vesselInfo.regionsBorderPoints.push_back(dbBorderPoints.mid(posBorder, borderPointsCount[i]));
-            vesselInfo.regionsUnionPoints.push_back(dbUnionPoints.mid(posUnion, unionPointsCount[i]));
-
             posSkeleton += skelegonPointsCount[i];
-            posBorder += borderPointsCount[i];
-            posUnion += unionPointsCount[i];
+        }
+        for(const int& pointsCount : borderPointsCount)
+        {
+            vesselInfo.regionsBorderPoints.push_back(dbBorderPoints.mid(posBorder, pointsCount));
+            posBorder += pointsCount;
+        }
+        for(const int& pointsCount : unionPointsCount)
+        {
+            vesselInfo.regionsUnionPoints.push_back(dbUnionPoints.mid(posUnion, pointsCount));
+            posUnion += pointsCount;
         }
 
         tByteArray = query.value(8).toByteArray();

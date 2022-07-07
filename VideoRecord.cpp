@@ -57,19 +57,8 @@ VideoRecord::VideoRecord(QWidget *parent)
     connect(&mLoopCalcFlowTrackTimer, &QTimer::timeout, this, &VideoRecord::slotLoopCheckDataAnalysis);
     mLoopCalcFlowTrackTimer.start();
 
-    {
-        QVector<VideoInfo> savedVideoInfo;
-        if(TableVideoInfo::getTableVideoInfo().selectVideoInfo(savedVideoInfo))
-        {
-            for(int i = 0; i < savedVideoInfo.size(); ++i)
-            {
-                mMapVideoRecordRowToPkVesselInfoID[i] = savedVideoInfo[i].fkVesselInfoID;
-                insertOneVideoRecord(savedVideoInfo[i]);
-            }
-        }
-    }
-
     QTimer::singleShot(1000, this, &VideoRecord::slotInitOpenCamera);
+    QTimer::singleShot(1000, this, &VideoRecord::slotLoadVideoInfos);
 }
 
 VideoRecord::~VideoRecord()
@@ -434,6 +423,17 @@ void VideoRecord::closeEvent(QCloseEvent *e)
         }
     }
     mDataAnalysisList.clear();
+
+    QList<AsyncDataAnalyser*> tAsyncDataAnalysers = mMapDataAnalyserToRowIndex.keys();
+    for(AsyncDataAnalyser* asyncDataAnalyser : tAsyncDataAnalysers)
+    {
+        disconnect(asyncDataAnalyser, &AsyncDataAnalyser::signalUpdateTrackArea, this, &VideoRecord::slotDataAnalysisFinish);
+        connect(asyncDataAnalyser, &AsyncDataAnalyser::signalUpdateTrackArea, [&](){
+            delete asyncDataAnalyser;
+            asyncDataAnalyser = nullptr;
+            mMapDataAnalyserToRowIndex.remove(asyncDataAnalyser);
+        });
+    }
 }
 
 bool VideoRecord::eventFilter(QObject *obj, QEvent *e)
@@ -471,6 +471,19 @@ void VideoRecord::slotInitOpenCamera()
     else
     {
         asyncUpdateAvaliableCameras();
+    }
+}
+
+void VideoRecord::slotLoadVideoInfos()
+{
+    QVector<VideoInfo> savedVideoInfo;
+    if(TableVideoInfo::getTableVideoInfo().selectVideoInfo(savedVideoInfo))
+    {
+        for(int i = 0; i < savedVideoInfo.size(); ++i)
+        {
+            mMapVideoRecordRowToPkVesselInfoID[i] = savedVideoInfo[i].fkVesselInfoID;
+            insertOneVideoRecord(savedVideoInfo[i]);
+        }
     }
 }
 
@@ -590,6 +603,7 @@ void VideoRecord::slotEnterDataAnalysis(QTableWidgetItem *videorecordItem)
     QString videoPath = mUI.videorecord->item(inRow, 0)->text();
     if(videoPath.isEmpty() || !QFile::exists(videoPath))
     {
+        QMessageBox::information(nullptr, QStringLiteral("提示"), QStringLiteral("视频文件不存在"));
         return;
     }
 
@@ -597,10 +611,13 @@ void VideoRecord::slotEnterDataAnalysis(QTableWidgetItem *videorecordItem)
     AcquireVideoInfo(videoPath, &imagelist);
     if(imagelist.empty())
     {
+        QMessageBox::information(nullptr, QStringLiteral("提示"), QStringLiteral("视频文件已损坏"));
         return;
     }
 
     double fps = mUI.videorecord->item(inRow, 2)->text().toDouble();
+    double pixelSize = mUI.videorecord->item(inRow, 3)->text().toDouble();
+    int magnification = mUI.videorecord->item(inRow, 4)->text().toInt();
     DataAnalysis* videoFramePlayer = nullptr;
     if(!mDataAnalysisList[inRow])
     {
@@ -619,8 +636,7 @@ void VideoRecord::slotEnterDataAnalysis(QTableWidgetItem *videorecordItem)
             }
         }
 
-        videoFramePlayer->setVideoAbsPath(videoPath);
-        videoFramePlayer->setWindowTitle(QStringLiteral("流速--图像解析 ") + videoPath);
+        videoFramePlayer->setVideoInfoMation(videoPath, pixelSize, magnification, fps);
         videoFramePlayer->setImageList(imagelist);
     }
     else
@@ -810,9 +826,7 @@ void VideoRecord::slotDataAnalysisFinish(AsyncDataAnalyser *asyncDataAnalyser)
 void VideoRecord::slotExportAllData()
 {
     QDir currentDir(QDir::current());
-
     currentDir.cdUp();
-
     if(currentDir.exists("data"))
     {
         currentDir.cd("data");
@@ -962,7 +976,14 @@ bool VideoRecord::insertOneVideoRecord(const QFileInfo &videoFileinfo, VideoInfo
 
     int duration = 0;
     double fps = 0.0;
-    AcquireVideoInfo(videoAbsPath, nullptr, &duration, &fps);
+    int width = 0;
+    int height = 0;
+    AcquireVideoInfo(videoAbsPath, nullptr, &duration, &fps, &width, &height);
+
+    if(0 == width || 0 == height)
+    {
+        return false;
+    }
 
     QTableWidgetItem* pathItem = new QTableWidgetItem;
     pathItem->setText(videoFileinfo.absoluteFilePath());
@@ -975,10 +996,23 @@ bool VideoRecord::insertOneVideoRecord(const QFileInfo &videoFileinfo, VideoInfo
     framerateItem->setText(QString::number(fps));
 
     QTableWidgetItem* pixelSizeItem = new QTableWidgetItem;
-    pixelSizeItem->setText("5.6");
-
     QTableWidgetItem* magnificationItem = new QTableWidgetItem;
-    magnificationItem->setText("5");
+
+    double pixelsize = 5.6;
+    int magnification = 5;
+    if(width == 656 && height == 492)
+    {
+        pixelsize = 5.6;
+        magnification = 5;
+    }
+    else if((width == 1456 && height == 1088) || (width == 1936 && height == 1216))
+    {
+        pixelsize = 3.45;
+        magnification = 4;
+    }
+
+    pixelSizeItem->setText(QString::number(pixelsize));
+    magnificationItem->setText(QString::number(magnification));
 
     QTableWidgetItem* flowrateItem = new QTableWidgetItem;
     flowrateItem->setText(QStringLiteral("等待中"));

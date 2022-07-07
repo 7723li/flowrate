@@ -348,7 +348,7 @@
         </sizepolicy>
        </property>
        <property name="text">
-        <string>智能录制</string>
+        <string>智能录制（稳定清晰时自动录制）</string>
        </property>
       </widget>
      </item>
@@ -465,6 +465,9 @@
      </item>
      <item row="2" column="0" colspan="3">
       <widget class="QTableWidget" name="videorecord">
+       <attribute name="horizontalHeaderDefaultSectionSize">
+        <number>80</number>
+       </attribute>
        <column>
         <property name="text">
          <string>视频路径</string>
@@ -500,7 +503,7 @@
      <item row="3" column="0" colspan="3">
       <widget class="QLabel" name="label">
        <property name="text">
-        <string>双击列表进入详细数据分析...</string>
+        <string>回车进入详细数据分析...</string>
        </property>
       </widget>
      </item>

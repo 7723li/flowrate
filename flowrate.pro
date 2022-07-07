@@ -35,11 +35,11 @@ SOURCES += \
     $$PWD/GifPlayer.cpp \
     $$PWD/DataAnalysis.cpp \
     $$PWD/AsyncProcesser.cpp \
-    $$PWD/DADataDisplayScene.cpp \
-    #$$PWD/DAVesselGraphScene.cpp \
     $$PWD/AsyncProcesser.cpp \
     $$PWD/HalconBase.cpp \
     $$PWD/VesselAlgorithm.cpp \
+    $$PWD/DADataDisplaySceneWidget.cpp \
+    $$PWD/DAVesselGraphSceneWidget.cpp \
 
 HEADERS += \
     $$PWD/AcquireVideoInfo.h \
@@ -49,18 +49,19 @@ HEADERS += \
     $$PWD/GifPlayer.h \
     $$PWD/DataAnalysis.h \
     $$PWD/AsyncProcesser.h \
-    $$PWD/DADataDisplayScene.h \
-    #$$PWD/DAVesselGraphScene.h \
     $$PWD/AsyncProcesser.h \
     $$PWD/HalconBase.h \
     $$PWD/VesselAlgorithm.h \
     $$PWD/CommonDataStruct.h \
     $$PWD/DataBase.hpp \
+    $$PWD/DADataDisplaySceneWidget.h \
+    $$PWD/DAVesselGraphSceneWidget.h \
 
 FORMS += \
     $$PWD/CameraParamWidget.ui \
     $$PWD/VideoRecord.ui \
     $$PWD/DataAnalysis.ui \
+    $$PWD/VesselPanel.ui
 
 LIBS += \
     $$PWD/libs/AVTCamera/lib/*.lib \

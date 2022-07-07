@@ -151,7 +151,7 @@ void VesselAlgorithm::calculateGlycocalyx(const QVector<QImage> &imagelist, doub
     Union1(RegionAlignVesselConcat, &UnionRegionVessel);
     HalconInterfaceBase::splitVesselRegion(UnionRegionVessel, imagelist.front().width(), imagelist.front().height(), &CenterLines, &RegionVesselSplited, &CenterLineContours, &NumberCenterLines, &vesselDiameters, &vesselLengts);
 
-    HalconInterfaceBase::calculateGlycocalyx(CenterLines, RegionVesselConcat, NumberCenterLines, TupleTranPrevToRearRows, TupleTranPrevToRearCols, pixelSize, magnification, &tGlycocalyx);
+    HalconInterfaceBase::calculateGlycocalyx(CenterLines, false, HTuple(), RegionVesselConcat, NumberCenterLines, TupleTranPrevToRearRows, TupleTranPrevToRearCols, pixelSize, magnification, &tGlycocalyx);
 
     glycocalyx.clear();
     for(int i = 0; i < NumberCenterLines; ++i)
@@ -240,7 +240,7 @@ void VesselAlgorithm::calculateAll(const QVector<QImage> &imagelist, double pixe
     // QImage队列转换为HALCON格式
     convertQImagelistToHObject(imagelist, &imagelistObj);
 
-    // ***************************************消抖+提取完整血管区域***************************************
+    // ***************************************消抖***************************************
     /*!
      * @brief
      * 防抖需要帧数
@@ -263,9 +263,9 @@ void VesselAlgorithm::calculateAll(const QVector<QImage> &imagelist, double pixe
     // ***************************************血管区域分段***************************************
     // 将完整的血管区域移动回跟首帧重叠
     HalconInterfaceBase::alignAntishakeRegion(RegionVesselConcat, &RegionAlignVesselConcat, 1, 10, TupleTranPrevToRearRows, TupleTranPrevToRearCols, "region");
-
-    // 判断中心线数量
     Union1(RegionAlignVesselConcat, &UnionRegionVessel);
+
+    // 血管区域图形分段
     HalconInterfaceBase::splitVesselRegion(UnionRegionVessel, imagelist.front().width(), imagelist.front().height(), &CenterLines, &RegionVesselSplited, &CenterLineContours, &NumberCenterLines, &vesselDiameters, &vesselLengts);
     if(NumberCenterLines == 0)
     {
@@ -273,7 +273,7 @@ void VesselAlgorithm::calculateAll(const QVector<QImage> &imagelist, double pixe
     }
 
     // ***************************************糖萼***************************************
-    HalconInterfaceBase::calculateGlycocalyx(CenterLines, RegionVesselConcat, NumberCenterLines, TupleTranPrevToRearRows, TupleTranPrevToRearCols, pixelSize, magnification, &tGlycocalyx);
+    HalconInterfaceBase::calculateGlycocalyx(CenterLines, false, HTuple(), RegionVesselConcat, NumberCenterLines, TupleTranPrevToRearRows, TupleTranPrevToRearCols, pixelSize, magnification, &tGlycocalyx);
 
     // ***************************************流速***************************************
     HalconInterfaceBase::calculateFlowrate(ImageGaussConcat, RegionVesselSplited, NumberCenterLines, TupleProcessImageIndex, TupleTranPrevToRearRows, TupleTranPrevToRearCols, pixelSize, magnification, fps, &tFlowrates);
@@ -309,6 +309,7 @@ void VesselAlgorithm::calculateAll(const QVector<QImage> &imagelist, double pixe
         GetContourXld(RegionSelected, &Rows, &Cols);
         GenRegionPolygon(&RegionSelected, Rows, Cols);
         GetRegionPoints(RegionSelected, &Rows, &Cols);
+
         pointCount = Rows.TupleLength();
         RegionPoints rp;
         for(int j = 0; j < pointCount; ++j)
@@ -327,6 +328,7 @@ void VesselAlgorithm::calculateAll(const QVector<QImage> &imagelist, double pixe
             GetContourXld(RegionSelected, &Rows, &Cols);
             GenRegionPolygon(&RegionSelected, Rows, Cols);
             GetRegionPoints(RegionSelected, &Rows, &Cols);
+
             pointCount = Rows.TupleLength();
             for(int k = 0; k < pointCount; ++k)
             {
@@ -347,4 +349,215 @@ void VesselAlgorithm::calculateAll(const QVector<QImage> &imagelist, double pixe
     }
 
     vesselInfo = tVesselInfo;
+}
+
+void VesselAlgorithm::reCalculateAll(const QVector<QImage> &imagelist, double pixelSize, int magnification, double fps, const QVector<int> erasedOriVesselIndex, const VesselInfo &oriVesselInfo, VesselInfo &newVesselInfo)
+{
+    /*!
+     * @brief  根据修改过的血管坐标和信息 重新计算血管信息和其余算法数据
+     * @author lzx
+     * @date   2022/06/23
+     *
+     * | antishake
+     *   [input：ImageList-图像序列 AntiShakeFrameNumber-防抖帧数
+     *   [output：RegionVesselConcat-血管区域 ImageGaussConcat-高斯模糊图像序列 TupleProcessImageIndex-处理过的图像序列下标 TupleTranPrevToRearRows/ TupleTranPrevToRearCols-防抖纵横位移]
+     *   [调试输入：path/pathloop/debug]
+     *
+     * --| recalculate_vessel_region
+     *     [input：oldVesselInfo output：newVesselInfo]
+     *
+     * ----| glycocalyx
+     *       [input：组合血管区域 output：糖萼尺寸]
+     *
+     * ----| flowrate
+     *       [input：图像序列/组合血管区域 output：红细胞流速]
+     */
+
+    HObject imagelistObj, RegionVesselConcat, ImageGaussConcat, RegionAlignVesselConcat, UnionRegionVessel;
+    HObject RegionCenterLine, RegionCenterLines, CenterLines, RegionVesselSplited, CenterLineContours, RegionSelected;
+    HObject EraseSplitRegionCenterLines;
+
+    HTuple NumberCenterLines, vesselDiameters, vesselLengths, PhiRegionCenterLines;
+    HTuple TupleProcessImageIndex, TupleTranPrevToRearRows, TupleTranPrevToRearCols;
+    HTuple Rows, Cols, pointCount, tGlycocalyx, tFlowrates;
+    HTuple oriDiameters;
+
+    VesselInfo tNewVesselInfo = oriVesselInfo;
+
+    // QImage队列转换为HALCON格式
+    convertQImagelistToHObject(imagelist, &imagelistObj);
+
+    // ***************************************消抖***************************************
+    /*!
+     * @brief
+     * 防抖需要帧数
+     * 完整血管区域 前10帧
+     * 糖萼计算     前10帧和后40帧
+     * 流速计算     前25帧
+     *
+     * 因此防抖最多需要50帧
+     */
+    HalconInterfaceBase::imagelistAntishake(imagelistObj, &RegionVesselConcat, &ImageGaussConcat, 50, &TupleProcessImageIndex, &TupleTranPrevToRearRows, &TupleTranPrevToRearCols);
+
+    // 少于10帧是清晰的 视频质量不过关 next one 甚至没有一帧是清晰的 离谱至极
+    if(TupleProcessImageIndex.TupleLength() < 10)
+    {
+        return;
+    }
+
+    // ***************************************重新计算血管信息***************************************
+    // 将完整的血管区域移动回跟首帧重叠
+    HalconInterfaceBase::alignAntishakeRegion(RegionVesselConcat, &RegionAlignVesselConcat, 1, 10, TupleTranPrevToRearRows, TupleTranPrevToRearCols, "region");
+    Union1(RegionAlignVesselConcat, &UnionRegionVessel);
+
+    {
+        /*!
+         * @brief
+         * 处理新增的血管区域
+         * 1、将画的坐标点转换为Region格式
+         * 2、删除画的时候预留的数据
+         */
+        GenEmptyObj(&RegionCenterLines);
+        int newDrawVesselNumber = tNewVesselInfo.regionsSkeletonPoints.size() - tNewVesselInfo.vesselNumber;
+        for(int i = newDrawVesselNumber - 1; i >= 0; --i)
+        {
+            int vesselIndex = i + tNewVesselInfo.vesselNumber;
+
+            Rows = HTuple();
+            Cols = HTuple();
+            for(const QPoint& regionPoint : tNewVesselInfo.regionsSkeletonPoints[vesselIndex])
+            {
+                Rows = Rows.TupleConcat(regionPoint.y());
+                Cols = Cols.TupleConcat(regionPoint.x());
+            }
+
+            GenRegionPoints(&RegionCenterLine, Rows, Cols);
+            ConcatObj(RegionCenterLines, RegionCenterLine, &RegionCenterLines);
+
+            oriDiameters = oriDiameters.TupleConcat(tNewVesselInfo.diameters[vesselIndex]);
+
+            tNewVesselInfo.regionsSkeletonPoints.remove(vesselIndex);
+            tNewVesselInfo.diameters.remove(vesselIndex);
+            tNewVesselInfo.lengths.remove(vesselIndex);
+            tNewVesselInfo.glycocalyx.remove(vesselIndex);
+            tNewVesselInfo.flowrates.remove(vesselIndex);
+        }
+
+        auto lambdaSort = [&](const int& a, const int& b){ return a > b;  };
+        QVector<int> reversedErasedOriVesselIndex(erasedOriVesselIndex);
+        std::sort(reversedErasedOriVesselIndex.begin(), reversedErasedOriVesselIndex.end(), lambdaSort);
+
+        /*!
+         * @brief
+         * 处理被擦除过的血管区域
+         * 1、将被擦过的血管坐标点转换为Region格式
+         * 2、删除原来的血管数据
+         */
+        for(const int& erasedVesselIndex : reversedErasedOriVesselIndex)
+        {
+            Rows = HTuple();
+            Cols = HTuple();
+            for(const QPoint& regionPoint : tNewVesselInfo.regionsSkeletonPoints[erasedVesselIndex])
+            {
+                Rows = Rows.TupleConcat(regionPoint.y());
+                Cols = Cols.TupleConcat(regionPoint.x());
+            }
+
+            GenRegionPoints(&RegionCenterLine, Rows, Cols);
+            ConcatObj(RegionCenterLines, RegionCenterLine, &RegionCenterLines);
+
+            oriDiameters = oriDiameters.TupleConcat(tNewVesselInfo.diameters[erasedVesselIndex]);
+
+            --tNewVesselInfo.vesselNumber;
+            tNewVesselInfo.regionsSkeletonPoints.remove(erasedVesselIndex);
+            tNewVesselInfo.regionsBorderPoints.remove(erasedVesselIndex);
+            tNewVesselInfo.regionsUnionPoints.remove(erasedVesselIndex);
+            tNewVesselInfo.diameters.remove(erasedVesselIndex);
+            tNewVesselInfo.lengths.remove(erasedVesselIndex);
+            tNewVesselInfo.glycocalyx.remove(erasedVesselIndex);
+            tNewVesselInfo.flowrates.remove(erasedVesselIndex);
+        }
+    }
+
+    // 重新分段计算
+    HalconInterfaceBase::reSplitVesselRegion(UnionRegionVessel, imagelist.front().width(), imagelist.front().height(), RegionCenterLines, oriDiameters, &CenterLines, &RegionVesselSplited, &CenterLineContours, &NumberCenterLines, &vesselDiameters, &vesselLengths);
+    if(vesselDiameters.TupleLength() == 0)
+    {
+        newVesselInfo = tNewVesselInfo;
+        return;
+    }
+
+    // ***************************************糖萼***************************************
+    HalconInterfaceBase::calculateGlycocalyx(CenterLines, true, oriDiameters, RegionVesselConcat, NumberCenterLines, TupleTranPrevToRearRows, TupleTranPrevToRearCols, pixelSize, magnification, &tGlycocalyx);
+
+    // ***************************************流速***************************************
+    HalconInterfaceBase::calculateFlowrate(ImageGaussConcat, RegionVesselSplited, NumberCenterLines, TupleProcessImageIndex, TupleTranPrevToRearRows, TupleTranPrevToRearCols, pixelSize, magnification, fps, &tFlowrates);
+
+    // 打完收工
+    tNewVesselInfo.vesselNumber += NumberCenterLines.TupleInt().I();
+
+    for(int i = 0; i < NumberCenterLines; ++i)
+    {
+        tNewVesselInfo.diameters.push_back(vesselDiameters[i]);
+        tNewVesselInfo.lengths.push_back(vesselLengths[i] * pixelSize / magnification);
+    }
+
+    for(int i = 0; i < NumberCenterLines; ++i)
+    {
+        RegionPoints rp;
+
+        SelectObj(RegionVesselSplited, &RegionSelected, i + 1);
+        GetRegionPoints(RegionSelected, &Rows, &Cols);
+        pointCount = Rows.TupleLength();
+        for(int j = 0; j < pointCount; ++j)
+        {
+            rp.push_back(QPoint(Cols[j], Rows[j]));
+        }
+        tNewVesselInfo.regionsUnionPoints.push_back(rp);
+    }
+
+    for(int i = 0; i < NumberCenterLines; ++i)
+    {
+        SelectObj(CenterLines, &RegionSelected, i + 1);
+        GetContourXld(RegionSelected, &Rows, &Cols);
+        Rows = Rows.TupleRound();
+        Cols = Cols.TupleRound();
+        pointCount = Rows.TupleLength();
+        RegionPoints rp;
+        for(int j = 0; j < pointCount; ++j)
+        {
+            rp.push_back(QPoint(Cols[j], Rows[j]));
+        }
+        tNewVesselInfo.regionsSkeletonPoints.push_back(rp);
+    }
+
+    for(int i = 0; i < NumberCenterLines; ++i)
+    {
+        RegionPoints rp;
+        for(int j = 1; j <= 2; ++j)
+        {
+            SelectObj(CenterLineContours, &RegionSelected, i * 2 + j);
+            GetContourXld(RegionSelected, &Rows, &Cols);
+            Rows = Rows.TupleRound();
+            Cols = Cols.TupleRound();
+            pointCount = Rows.TupleLength();
+            for(int k = 0; k < pointCount; ++k)
+            {
+                rp.push_back(QPoint(Cols[k], Rows[k]));
+            }
+        }
+        tNewVesselInfo.regionsBorderPoints.push_back(rp);
+    }
+
+    for(int i = 0; i < NumberCenterLines; ++i)
+    {
+        tNewVesselInfo.glycocalyx.push_back(tGlycocalyx[i]);
+    }
+
+    for(int i = 0; i < NumberCenterLines; ++i)
+    {
+        tNewVesselInfo.flowrates.push_back(tFlowrates[i]);
+    }
+
+    newVesselInfo = tNewVesselInfo;
 }

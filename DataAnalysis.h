@@ -9,14 +9,18 @@
 #include <QTime>
 #include <QTimer>
 #include <QMessageBox>
+#include <QFileInfo>
+#include <QScrollArea>
+#include <QKeyEvent>
+#include <QWheelEvent>
 
 #include "ui_DataAnalysis.h"
 
 #include "VesselAlgorithm.h"
 #include "GifPlayer.h"
 
-#include "DADataDisplayScene.h"
-//#include "DAVesselGraphScene.h"
+#include "DADataDisplaySceneWidget.h"
+#include "DAVesselGraphSceneWidget.h"
 
 class DataAnalysis : public QWidget
 {
@@ -26,12 +30,13 @@ public:
     explicit DataAnalysis(double fps, QWidget* p = nullptr);
     virtual ~DataAnalysis() override;
 
-    void setVideoAbsPath(const QString& videoAbsPath);
+    void setVideoInfoMation(const QString& videoAbsPath, double pixelSize, int magnification, double fps);
 
     void setImageList(QVector<QImage>& imagelist);
 
     void setFirstSharpImageIndex(int firstSharpImageIndex);
 
+public slots:
     void updateVesselInfo(VesselInfo& vesselInfo);
 
 protected:
@@ -43,6 +48,8 @@ private slots:
     void slotSwithDataDisplay();
 
     void slotSwitchVesselGraph();
+
+    void slotDataDisplayListDoubleClick(const QModelIndex &index);
 
 signals:
     void signalExit(DataAnalysis*);
@@ -58,6 +65,6 @@ private:
 
     VesselInfo mVesselInfo;                     // 血管数据
 
-    DADataDisplayScene* mDADataDisplayScene;    // 流速场景
-    //DAVesselGraphScene* mDAVesselGraphScene;  // 描记场景
+    DADataDisplaySceneWidget* mDADataDisplaySceneWidget;    // 数据展示场景控件
+    DAVesselGraphSceneWidget* mDAVesselGraphSceneWidget;    // 描记场景控件
 };

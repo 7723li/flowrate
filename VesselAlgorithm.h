@@ -86,6 +86,15 @@ public:
      */
     static void calculateAll(const QVector<QImage>& imagelist, double pixelSize, int magnification, double fps, VesselInfo& vesselInfo, int& firstSharpImageIndex);
 
+    /*!
+     * @brief
+     * 描完血管之后再过两招
+     *
+     * @attention
+     * 代码跟上面那个基本一致 除了不用分割血管
+     */
+    static void reCalculateAll(const QVector<QImage>& imagelist, double pixelSize, int magnification, double fps, const QVector<int> erasedOriVesselIndex, const VesselInfo& oriVesselInfo, VesselInfo& newVesselInfo);
+
 private:
     /*!
      * @brief

@@ -1,25 +1,31 @@
 ﻿#pragma once
 
-#include <QObject>
+#include <QWidget>
+#include <QMouseEvent>
+#include <QKeyEvent>
+#include <QWheelEvent>
 #include <QFileInfo>
 #include <QDir>
-#include <QKeyEvent>
-#include <QTimer>
+#include <QPaintEvent>
+#include <QPainter>
+#include <QResizeEvent>
+#include <QPainterPath>
+#include <QShowEvent>
+#include <QScrollBar>
+#include <QHideEvent>
 
-#include <QGraphicsScene>
-#include <QGraphicsSceneWheelEvent>
-#include <QGraphicsPathItem>
-#include <QGraphicsSceneMouseEvent>
-
+#include "CommonDataStruct.h"
 #include "VesselAlgorithm.h"
 
 #include "ui_DataAnalysis.h"
 
-class DADataDisplayScene : public QGraphicsScene
+class DADataDisplaySceneWidget : public QWidget
 {
+    Q_OBJECT
+
 public:
-    explicit DADataDisplayScene(Ui_DataAnalysis& ui, const QVector<QImage>& imageList, QObject* p = nullptr);
-    virtual ~DADataDisplayScene() override;
+    explicit DADataDisplaySceneWidget(Ui_DataAnalysis& ui, const QVector<QImage>& imageList,  QWidget *parent = nullptr);
+    virtual ~DADataDisplaySceneWidget() override;
 
     void setVideoAbsPath(const QString& videoAbsPath);
 
@@ -32,11 +38,19 @@ public:
 protected:
     virtual void keyPressEvent(QKeyEvent* e) override;
 
-    virtual void wheelEvent(QGraphicsSceneWheelEvent* e) override;
+    virtual void keyReleaseEvent(QKeyEvent *event) override;
 
-    virtual void drawBackground(QPainter *painter, const QRectF &rect) override;
+    virtual void wheelEvent(QWheelEvent* e) override;
 
-    virtual void mousePressEvent(QGraphicsSceneMouseEvent* e) override;
+    virtual void paintEvent(QPaintEvent *event) override;
+
+    virtual void resizeEvent(QResizeEvent *event) override;
+
+    virtual void mousePressEvent(QMouseEvent* e) override;
+
+    virtual void showEvent(QShowEvent *event) override;
+
+    virtual void hideEvent(QHideEvent *event) override;
 
 private slots:
     void slotChangeShowRegion(const QString& region);
@@ -64,7 +78,10 @@ private:
     int mCurrentFrameIndex;         // 当前帧下标
     int mTotalFrameCount;           // 总帧数
 
-    const VesselInfo* mVesselInfo;  // 全部图片的血管数据
+    bool mCtrlPressing;             // ctrl
+    double mScale;                  // 缩放
+
+    const VesselInfo* mPtrVesselInfo;               // 全部图片的血管数据
 
     double mSharpness;              // 清晰度数值
     bool mIsSharp;                  // 是否清晰
@@ -73,11 +90,6 @@ private:
     bool mIsShowingRegionBorder;    // 是否正在显示血管边缘
     bool mIsShowingRegionUnion;     // 是否正在显示血管完整区域
 
-    QVector<QGraphicsPathItem*> mSkeletonPathItems;         // 血管中心线
-    QVector<QGraphicsPathItem*> mBorderPathItems;           // 血管边缘轮廓
-    QVector<QGraphicsPathItem*> mRegionUnionPathItems;      // 血管完整区域
-
-    QTableWidgetItem* mChoosenVesselInfoRowItem;            // 选中的血管数据行
-    QGraphicsPathItem* mCurrentChoosenPathItem;             // 选中的血管数据行对应的显示血管
-    QGraphicsPathItem* mLastChoosenPathItem;
+    QTableWidgetItem* mChoosenVesselInfoRowItem;    // 选中的血管数据行
+    const RegionPoints* mCurrentChoosenPathItem;    // 选中的血管数据行对应的显示血管
 };

@@ -334,9 +334,9 @@ void HalconInterfaceBase::regionStabilization(HObject RegionUnionPrev, HObject R
 
 void HalconInterfaceBase::alignAntishakeRegion(HObject RegionOrigin, HObject *RegionAntishaked, HTuple BeginFrame, HTuple EndFrame, HTuple TupleTranPrevToRearRows, HTuple TupleTranPrevToRearCols, HTuple Type)
 {
-    HObject  RegionAntiShakeMergeMask, RegionSelected;
+    HObject UnionRegionAntishaked, RegionAntiShakeMergeMask, RegionSelected;
 
-    HTuple  CountRegionOrigin, Width, Height;
+    HTuple  CountRegionOrigin, Row1, Column1, Row2, Column2;
     HTuple  I, HomMat2DRearToPrev;
 
     CountObj(RegionOrigin, &CountRegionOrigin);
@@ -350,9 +350,9 @@ void HalconInterfaceBase::alignAntishakeRegion(HObject RegionOrigin, HObject *Re
         SelectObj(RegionOrigin, &(*RegionAntishaked), BeginFrame);
 
         //防抖后的合并掩膜
-        RegionFeatures((*RegionAntishaked), "width", &Width);
-        RegionFeatures((*RegionAntishaked), "height", &Height);
-        GenRectangle1(&RegionAntiShakeMergeMask, 0, 0, Height, Width);
+        Union1(*RegionAntishaked, &UnionRegionAntishaked);
+        SmallestRectangle1(UnionRegionAntishaked, &Row1, &Column1, &Row2, &Column2);
+        GenRectangle1(&RegionAntiShakeMergeMask, Row1, Column1, Row2, Column2);
 
         for (I = BeginFrame + 1; I <= EndFrame; ++I)
         {
@@ -379,7 +379,7 @@ void HalconInterfaceBase::alignAntishakeRegion(HObject RegionOrigin, HObject *Re
     }
 }
 
-void HalconInterfaceBase::splitVesselRegion(const HObject &RegionVesselConcat, int width, int height, HObject *CenterLines, HObject *RegionVesselSplited, HObject *CenterLineContours, HTuple *NumberCenterLines, HTuple *vesselDiameters, HTuple *vesselLengths)
+void HalconInterfaceBase::splitVesselRegion(const HObject &RegionVesselUnion, HTuple Width, HTuple Height, HObject *CenterLines, HObject *RegionVesselSplited, HObject *CenterLineContours, HTuple *NumberCenterLines, HTuple *vesselDiameters, HTuple *vesselLengths)
 {
     HObject  ImageRegionVesselConcat, RawCenterLines;
     HObject  RawCenterLine, NeedUnionContours, NoNeedUnionContours;
@@ -402,10 +402,10 @@ void HalconInterfaceBase::splitVesselRegion(const HObject &RegionVesselConcat, i
 
     //使用组合流动轨迹的最大内切半径的1.5倍 计算流动轨迹的各中心线
     //注：不用2倍是为了避免过大的内切直径 导致提取中心线时忽略了太多的小直径区域
-    RegionFeatures(RegionVesselConcat, "inner_radius", &InnerRadiusRegionVesselConcat);
+    RegionFeatures(RegionVesselUnion, "inner_radius", &InnerRadiusRegionVesselConcat);
 
-    GenImageConst(&ImageRegionVesselConcat, "byte", width, height);
-    OverpaintRegion(ImageRegionVesselConcat, RegionVesselConcat, 255, "fill");
+    GenImageConst(&ImageRegionVesselConcat, "byte", Width, Height);
+    OverpaintRegion(ImageRegionVesselConcat, RegionVesselUnion, 255, "fill");
 
     calculate_lines_gauss_parameters(InnerRadiusRegionVesselConcat * 1.5, 255, &Sigma, &Low, &High);
     LinesGauss(ImageRegionVesselConcat, &RawCenterLines, Sigma, Low, High, "light", "true", "parabolic", "true");
@@ -545,8 +545,8 @@ void HalconInterfaceBase::splitVesselRegion(const HObject &RegionVesselConcat, i
         GenContourPolygonXld(&RealContourRight, RealRowR, RealColR);
 
         //生成左右轮廓区域
-        GenRegionPolygon(&RegionCenterLineLeft, RealRowL, RealColL);
-        GenRegionPolygon(&RegionCenterLineRight, RealRowR, RealColR);
+        GenRegionPoints(&RegionCenterLineLeft, RealRowL, RealColL);
+        GenRegionPoints(&RegionCenterLineRight, RealRowR, RealColR);
 
         //封闭左右轮廓区域 封闭失败的中心线过滤掉
         try
@@ -580,10 +580,188 @@ void HalconInterfaceBase::splitVesselRegion(const HObject &RegionVesselConcat, i
     //填充封闭区域 生成计算流速用的血管区域
     FillUp(RegionCenterLineContours, &FillupCenterLineContours);
     ClosingCircle(FillupCenterLineContours, &ClosingCenterLineContours, InnerRadiusRegionVesselConcat);
-    Intersection(ClosingCenterLineContours, RegionVesselConcat, &(*RegionVesselSplited));
+    Intersection(ClosingCenterLineContours, RegionVesselUnion, &(*RegionVesselSplited));
 }
 
-void HalconInterfaceBase::calculateGlycocalyx(HObject CenterLines, HObject RegionVesselConcat, HTuple NumberCenterLines, HTuple TupleTranPrevToRearRows, HTuple TupleTranPrevToRearCols, HTuple Pixelsize, HTuple Magnification, HTuple *glycocalyx)
+void HalconInterfaceBase::reSplitVesselRegion(const HObject &RegionVesselUnion, HTuple Width, HTuple Height, const HObject &RegionCenterLines, const HTuple &oriDiameters, HObject *CenterLines, HObject *RegionsSplited, HObject *CenterLineContours, HTuple *NumberCenterLines, HTuple *vesselDiameters, HTuple *vesselLengths)
+{
+    HTuple RegionCenterLinesCount, AreaSplitedRegionCenterLine, useless, MaxAreaSplitedRegionCenterLine;
+    HTuple PhiRegionCenterLines, RowL, ColL, RowR, ColR;
+    HTuple Rows, Cols, K, RealRowL, RealColL, RealRowR, RealColR, TempVesselLengths, TempRegionsSplitedNumber;
+    HTuple AreaClosingCenterLineContours, AreaTempRegionsSplited;
+
+    HObject RegionCenterLine, SplitedRegionCenterLines, SplitedRegionCenterLine;
+    HObject TempCenterLines, RealContourLeft, RealContourRight;
+    HObject RegionCenterLineLeft, RegionCenterLineRight, LineRegionCenterLineHead, LineRegionCenterLineTail;
+    HObject RegionCenterLineContourBody, RegionCenterLineContourConnect, RegionCenterLineContour, RegionCenterLineContours;
+    HObject FillupCenterLineContours, ClosingCenterLineContours, TempRegionsSplited, RegionSplitedSelected;
+
+    GenEmptyObj(CenterLines);
+    GenEmptyObj(RegionsSplited);
+    GenEmptyObj(CenterLineContours);
+    *NumberCenterLines = 0;
+    *vesselDiameters = HTuple();
+    *vesselLengths = HTuple();
+
+    CountObj(RegionCenterLines, &RegionCenterLinesCount);
+    for(int i = 1; i <= RegionCenterLinesCount; ++i)
+    {
+        GenEmptyObj(&RegionCenterLineContours);
+
+        SelectObj(RegionCenterLines, &RegionCenterLine, i);
+        Connection(RegionCenterLine, &SplitedRegionCenterLines);
+
+        // 最大的分割面积比1还小 说明整条擦掉了
+        AreaCenter(SplitedRegionCenterLines, &AreaSplitedRegionCenterLine, &useless, &useless);
+        TupleMax(AreaSplitedRegionCenterLine, &MaxAreaSplitedRegionCenterLine);
+        if(MaxAreaSplitedRegionCenterLine < 1)
+        {
+            continue;
+        }
+        SelectShape(SplitedRegionCenterLines, &SplitedRegionCenterLines, "area", "and", 1, MaxAreaSplitedRegionCenterLine);
+
+        RegionFeatures(SplitedRegionCenterLines, "phi", &PhiRegionCenterLines);
+        int splitVesselNumber = PhiRegionCenterLines.TupleLength();
+        for(int j = 1; j <= splitVesselNumber; ++j)
+        {
+            ++(*NumberCenterLines);
+            *vesselDiameters = (*vesselDiameters).TupleConcat(oriDiameters[i - 1]);
+
+            SelectObj(SplitedRegionCenterLines, &RegionCenterLine, j);
+            GetRegionPoints(RegionCenterLine, &Rows, &Cols);
+
+            // 遵循左右轮廓的距离 半径*sqrt(0.75)
+            RowL = Rows - PhiRegionCenterLines[i - 1].ToTuple().TupleCos() * oriDiameters[i - 1] / 2 * (HTuple(0.75).TupleSqrt());
+            ColL = Cols - PhiRegionCenterLines[i - 1].ToTuple().TupleSin() * oriDiameters[i - 1] / 2 * (HTuple(0.75).TupleSqrt());
+            RowR = Rows + PhiRegionCenterLines[i - 1].ToTuple().TupleCos() * oriDiameters[i - 1] / 2 * (HTuple(0.75).TupleSqrt());
+            ColR = Cols + PhiRegionCenterLines[i - 1].ToTuple().TupleSin() * oriDiameters[i - 1] / 2 * (HTuple(0.75).TupleSqrt());
+
+            //过滤掉坐标中的负值 确保左右轮廓都在图像界内
+            RealRowL = HTuple();
+            RealColL = HTuple();
+            RealRowR = HTuple();
+            RealColR = HTuple();
+
+            HTuple end_val98 = (RowL.TupleLength())-1;
+            HTuple step_val98 = 1;
+            for (K=0; K.Continue(end_val98, step_val98); K += step_val98)
+            {
+                if (0 != (HTuple(int(HTuple(RowL[K])>0)).TupleAnd(int(HTuple(ColL[K])>0))))
+                {
+                    RealRowL = RealRowL.TupleConcat(HTuple(RowL[K]));
+                    RealColL = RealColL.TupleConcat(HTuple(ColL[K]));
+                }
+            }
+
+            HTuple end_val105 = RowR.TupleLength() - 1;
+            for (K = 0; K <= end_val105; ++K)
+            {
+                if (RowR[K] > 0 && ColR[K] > 0)
+                {
+                    RealRowR = RealRowR.TupleConcat(HTuple(RowR[K]));
+                    RealColR = RealColR.TupleConcat(HTuple(ColR[K]));
+                }
+            }
+
+            //如果中心线整体都在界外 过滤掉
+            if (RealRowL.TupleLength() == 0 || RealColL.TupleLength() == 0 || RealRowR.TupleLength() == 0 || RealColR.TupleLength() == 0)
+            {
+                continue;
+            }
+
+            //生成左右轮廓
+            GenContourPolygonXld(&RealContourLeft, RealRowL, RealColL);
+            GenContourPolygonXld(&RealContourRight, RealRowR, RealColR);
+
+            //生成左右轮廓区域
+            GenRegionPoints(&RegionCenterLineLeft, RealRowL, RealColL);
+            GenRegionPoints(&RegionCenterLineRight, RealRowR, RealColR);
+
+            //封闭左右轮廓区域 封闭失败的中心线过滤掉
+            try
+            {
+                GenRegionLine(&LineRegionCenterLineHead, HTuple(RealRowL[0]), HTuple(RealColL[0]), HTuple(RealRowR[0]), HTuple(RealColR[0]));
+                GenRegionLine(&LineRegionCenterLineTail, HTuple(RealRowL[(RealRowL.TupleLength())-1]), HTuple(RealColL[(RealColL.TupleLength())-1]), HTuple(RealRowR[(RealRowR.TupleLength())-1]), HTuple(RealColR[(RealColR.TupleLength())-1]));
+            }
+            catch (HException &HDevExpDefaultException)
+            {
+                continue;
+            }
+
+            Union2(RegionCenterLineLeft, RegionCenterLineRight, &RegionCenterLineContourBody);
+            Union2(LineRegionCenterLineHead, LineRegionCenterLineTail, &RegionCenterLineContourConnect);
+            Union2(RegionCenterLineContourBody, RegionCenterLineContourConnect, &RegionCenterLineContour);
+
+            //界内中心线/左右轮廓/封闭区域
+            ConcatObj(*CenterLineContours, RealContourLeft, CenterLineContours);
+            ConcatObj(*CenterLineContours, RealContourRight, CenterLineContours);
+
+            ConcatObj(RegionCenterLineContours, RegionCenterLineContour, &RegionCenterLineContours);
+        }
+
+        // 收集 一条血管重新分割得到的中心线轮廓
+        //HObject SplitedRegionCenterLine;
+        TempVesselLengths = HTuple();
+        HTuple SplitedRegionCenterLinesNumber, Sigma, Low, High, lengths;
+        HObject image, lines, line;
+        calculate_lines_gauss_parameters(1, 255, &Sigma, &Low, &High);
+        CountObj(SplitedRegionCenterLines, &SplitedRegionCenterLinesNumber);
+        for(int j = 1; j <= SplitedRegionCenterLinesNumber; ++j)
+        {
+            SelectObj(SplitedRegionCenterLines, &SplitedRegionCenterLine, j);
+            GenImageConst(&image, "byte", Width, Height);
+            OverpaintRegion(image, SplitedRegionCenterLine, 255, "fill");
+            LinesGauss(image, &lines, Sigma, Low, High, "light", "true", "parabolic", "true");
+            UnionAdjacentContoursXld(lines, &lines, 1, 10, "attr_keep");
+            LengthXld(lines, &lengths);
+            if(lengths.TupleLength() == 1)
+            {
+                TempVesselLengths = TempVesselLengths.TupleConcat(lengths);
+                SelectObj(lines, &line, 1);
+                ConcatObj(*CenterLines, line, CenterLines);
+            }
+            else if(lengths.TupleLength() > 1)
+            {
+                HTuple MaxLength, MaxLengthIndex;
+                TupleMax(lengths, &MaxLength);
+                TupleFind(lengths, MaxLength, &MaxLengthIndex);
+                TempVesselLengths = TempVesselLengths.TupleConcat(lengths[MaxLengthIndex]);
+                SelectObj(lines, &line, MaxLengthIndex + 1);
+                ConcatObj(*CenterLines, line, CenterLines);
+            }
+        }
+//        GenContourRegionXld(SplitedRegionCenterLines, &TempCenterLines, "center");
+//        ConcatObj(*CenterLines, TempCenterLines, CenterLines);
+//        LengthXld(TempCenterLines, &TempVesselLengths);
+        *vesselLengths = vesselLengths->TupleConcat(TempVesselLengths);
+
+        //填充封闭区域 生成计算流速用的血管区域
+        FillUp(RegionCenterLineContours, &FillupCenterLineContours);
+        ClosingCircle(FillupCenterLineContours, &ClosingCenterLineContours, oriDiameters[i - 1]);
+        Intersection(ClosingCenterLineContours, RegionVesselUnion, &TempRegionsSplited);
+
+        AreaCenter(ClosingCenterLineContours, &AreaClosingCenterLineContours, &useless, &useless);
+        AreaCenter(TempRegionsSplited, &AreaTempRegionsSplited, &useless, &useless);
+
+        CountObj(TempRegionsSplited, &TempRegionsSplitedNumber);
+        for(int i = 1; i <= TempRegionsSplitedNumber; ++i)
+        {
+            if(AreaClosingCenterLineContours[i - 1] > 0 && AreaTempRegionsSplited[i - 1] > 0 &&
+                    AreaTempRegionsSplited[i - 1].ToTuple().TupleReal() / AreaClosingCenterLineContours[i - 1].ToTuple().TupleReal() >= 0.6)
+            {
+                SelectObj(TempRegionsSplited, &RegionSplitedSelected, i);
+                ConcatObj(*RegionsSplited, RegionSplitedSelected, RegionsSplited);
+            }
+            else
+            {
+                SelectObj(ClosingCenterLineContours, &RegionSplitedSelected, i);
+                ConcatObj(*RegionsSplited, RegionSplitedSelected, RegionsSplited);
+            }
+        }
+    }
+}
+
+void HalconInterfaceBase::calculateGlycocalyx(HObject CenterLines, bool isManual, HTuple vesselDiameters, HObject RegionVesselConcat, HTuple NumberCenterLines, HTuple TupleTranPrevToRearRows, HTuple TupleTranPrevToRearCols, HTuple Pixelsize, HTuple Magnification, HTuple *glycocalyx)
 {
     HObject  VesselLines, CenterLine, VesselLine;
     HObject  line, PreLine, RegionAlignVesselConcat;
@@ -621,14 +799,35 @@ void HalconInterfaceBase::calculateGlycocalyx(HObject CenterLines, HObject Regio
         //获取单条血管的位置/角度/
         GetContourXld(CenterLine, &Row, &Col);
 
-        GetContourAttribXld(CenterLine, "angle", &Attrib);
+        try
+        {
+            GetContourAttribXld(CenterLine, "angle", &Attrib);
+        }
+        catch (...)
+        {
+            GetContourAngleXld(CenterLine, "abs", "mean", 3, &Attrib);
+        }
         GenEmptyObj(&VesselLine);
 
-        GetContourAttribXld(CenterLine, "width_right", &WidthR);
-        GetContourAttribXld(CenterLine, "width_left", &WidthL);
+        try
+        {
+            GetContourAttribXld(CenterLine, "width_right", &WidthR);
+            GetContourAttribXld(CenterLine, "width_left", &WidthL);
 
-        Diameter = (WidthL+WidthR)*(HTuple(0.75).TupleSqrt());
-        Diam = (Diameter.TupleSum())/(Diameter.TupleLength());
+            Diameter = (WidthL+WidthR)*(HTuple(0.75).TupleSqrt());
+            Diam = (Diameter.TupleSum())/(Diameter.TupleLength());
+        }
+        catch (...)
+        {
+            if(isManual)
+            {
+                Diam = vesselDiameters[J - 1];
+            }
+            else
+            {
+                continue;
+            }
+        }
 
         if (Diam >= 5 && Diam <= 30 && Row.TupleLength() > 100)
         {

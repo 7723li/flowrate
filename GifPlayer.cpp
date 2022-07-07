@@ -1,7 +1,7 @@
 ﻿#include "GifPlayer.h"
 
-GifPlayer::GifPlayer(const QVector<QImage>& imagelist, double fps, QWidget *p) :
-    QOpenGLWidget(p), mImagelist(imagelist), mCurrentIndex(0), mIsGifPlaying(true), mFps(fps)
+GifPlayer::GifPlayer(const QVector<QImage>& imagelist, QWidget *p) :
+    QOpenGLWidget(p), mImagelist(imagelist), mCurrentIndex(0), mIsGifPlaying(true), mFps(0.0)
 {
     mGifPlayButton.setParent(this);
     mGifPlayButton.setStyleSheet("\
@@ -9,8 +9,6 @@ GifPlayer::GifPlayer(const QVector<QImage>& imagelist, double fps, QWidget *p) :
                                  QPushButton::hover{border:0px black solid;background-color:rgb(255, 247, 237);}\
                                  QPushButton::click{border:1px black solid;background-color:rgb(255, 247, 237);}");
     mGifPlayButton.setText(QStringLiteral("停"));
-
-    mGifTimer.setInterval(static_cast<int>(1000.0 / fps));
 
     connect(&mGifTimer, SIGNAL(timeout()), this, SLOT(update()));
     connect(&mGifPlayButton, &QPushButton::clicked, this, &GifPlayer::slotSwitchPlaying);
@@ -21,6 +19,11 @@ GifPlayer::~GifPlayer()
 
 }
 
+void GifPlayer::setFps(double fps)
+{
+    mFps = fps;
+}
+
 void GifPlayer::showEvent(QShowEvent *e)
 {
     e->accept();
@@ -28,17 +31,22 @@ void GifPlayer::showEvent(QShowEvent *e)
     {
         this->setGeometry(mCurrentRect);
     }
-    mGifTimer.start();
+    mIsGifPlaying = false;
+    if(mFps > 0)
+    {
+        mIsGifPlaying = true;
+        mGifTimer.setInterval(static_cast<int>(1000.0 / mFps));
+        mGifTimer.start();
+    }
 }
 
 void GifPlayer::paintEvent(QPaintEvent *e)
 {
     e->accept();
 
-    QImage showimage;
     if(mIsGifPlaying)
     {
-        showimage = mImagelist[mCurrentIndex++];
+        mShowimage = mImagelist[mCurrentIndex++];
         if(mCurrentIndex >= mImagelist.size())
         {
             mCurrentIndex = 0;
@@ -46,12 +54,12 @@ void GifPlayer::paintEvent(QPaintEvent *e)
     }
     else
     {
-        showimage = mImagelist[mCurrentIndex];
+        mShowimage = mImagelist[mCurrentIndex];
     }
 
     QPainter painter;
     painter.begin(this);
-    painter.drawImage(QRect(0, 0, this->width(), this->height()), showimage, QRect(0, 0, showimage.width(), showimage.height()));
+    painter.drawImage(QRect(0, 0, this->width(), this->height()), mShowimage, QRect(0, 0, mShowimage.width(), mShowimage.height()));
     painter.end();
 
     mGifPlayButton.move(20, this->height() - 20);

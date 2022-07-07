@@ -1,6 +1,6 @@
 ﻿#include "AcquireVideoInfo.h"
 
-AcquireVideoInfo::AcquireVideoInfo(const QString &videopath, QVector<QImage>* imagelist, int* duration, double* fps, int analysisFrameCount) :
+AcquireVideoInfo::AcquireVideoInfo(const QString &videopath, QVector<QImage>* imagelist, int* duration, double* fps, int* width, int* height, int analysisFrameCount) :
     mAVFormatContext(nullptr), mAVCodecContext(nullptr), mAVStream(nullptr),
     mVideoCodec(nullptr), mOrifmtFrame(nullptr), mSwsfmtFrame(nullptr),
     mImgConvertCtx(nullptr), mFrameBuffer(nullptr), mReadPackct(nullptr),
@@ -51,6 +51,16 @@ AcquireVideoInfo::AcquireVideoInfo(const QString &videopath, QVector<QImage>* im
         if(fps)
         {
             *fps = mFps;
+        }
+
+        if(width)
+        {
+            *width = mAVCodecContext->width;
+        }
+
+        if(height)
+        {
+            *height = mAVCodecContext->height;
         }
     }
 

@@ -133,3 +133,32 @@ private:
     QImage mImage;
 };
 
+/*!
+ * @brief
+ * 数据重新计算线程
+ */
+class AsyncDataReanalyser : public QThread
+{
+    Q_OBJECT
+
+public:
+    explicit AsyncDataReanalyser(const QVector<QImage>& imagelist, double fps, double pixelSize, int magnification, const QVector<int>& erasedOriVesselIndex, const VesselInfo &oriVesselInfo);
+    virtual ~AsyncDataReanalyser() override;
+
+    VesselInfo& getNewVesselInfo();
+
+protected:
+    virtual void run() override;
+
+signals:
+    void signalReanalysisFinished();
+
+private:
+    const QVector<QImage>& mImagelist;
+    double mFps;
+    double mPixelSize;
+    int mMagnification;
+    const QVector<int>& mErasedOriVesselIndex;
+    const VesselInfo& mOriVesselInfo;
+    VesselInfo mNewVesselInfo;
+};

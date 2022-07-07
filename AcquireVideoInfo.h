@@ -30,7 +30,7 @@ public:
      * @param fps                   输出的视频fps 若输入空指针 同上
      * @param analysisFrameCount    输入的需要解析的图像序列大小 默认为100
      */
-    AcquireVideoInfo(const QString& videopath, QVector<QImage>* imagelist = nullptr, int* duration = nullptr, double* fps = nullptr, int analysisFrameCount = 100);
+    AcquireVideoInfo(const QString& videopath, QVector<QImage>* imagelist = nullptr, int* duration = nullptr, double* fps = nullptr, int* width = nullptr, int* height = nullptr, int analysisFrameCount = 100);
 
 private:
     /*!
