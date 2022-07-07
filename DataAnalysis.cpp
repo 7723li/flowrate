@@ -113,8 +113,8 @@ void DataAnalysis::closeEvent(QCloseEvent *e)
     if(mDAVesselGraphSceneWidget->isSaving())
     {
         QMessageBox messageBox(QMessageBox::Icon::Warning, QStringLiteral("警告"), QStringLiteral("正在更新保存中 现在关闭会丢失未保存的操作"),
-                               QMessageBox::StandardButton::Ok | QMessageBox::StandardButton::No, nullptr);
-        messageBox.button(QMessageBox::StandardButton::Ok)->setText(QStringLiteral("依然退出"));
+                               /*QMessageBox::StandardButton::Ok | */QMessageBox::StandardButton::No, nullptr);
+        //messageBox.button(QMessageBox::StandardButton::Ok)->setText(QStringLiteral("依然退出"));
         messageBox.button(QMessageBox::StandardButton::No)->setText(QStringLiteral("先等一等"));
         messageBox.setDefaultButton(QMessageBox::StandardButton::No);
         messageBox.setWindowIcon(QIcon(":/icons/image/icon.ico"));

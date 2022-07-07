@@ -2,7 +2,7 @@
 ; 有关创建 Inno Setup 脚本文件的详细资料请查阅帮助文档！
 
 #define MyAppName "流速测试"
-#define MyAppVersion "1.02"
+#define MyAppVersion "1.03.01"
 #define MyAppPublisher "Medsoft-RJB"
 #define MyAppExeName "flowrate.exe"
 
