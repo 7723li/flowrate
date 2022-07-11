@@ -546,7 +546,7 @@ void VideoRecord::slotDisplaySharpnessAndAutoRecord(double sharpness, bool isSha
     {
         mUI.isSharp->setText(tips[0]);
 
-        if(!mVideoRecorder->recording() && mUI.checkBoxAutoRecord->isChecked())
+        if(!mVideoWriter.isOpened() && !mVideoRecorder->recording() && mUI.checkBoxAutoRecord->isChecked())
         {
             ++mContinueSharpFrameCount;
             if(mContinueSharpFrameCount >= 10)

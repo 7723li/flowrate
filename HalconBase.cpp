@@ -455,6 +455,7 @@ void HalconInterfaceBase::splitVesselRegion(const HObject &RegionVesselUnion, HT
     GenEmptyObj(CenterLines);
     GenEmptyObj(CenterLineContours);
     GenEmptyObj(&RegionCenterLineContours);
+    GenEmptyObj(RegionVesselSplited);
 
     //遍历中心线
     //1、过滤界外中心线
@@ -574,13 +575,16 @@ void HalconInterfaceBase::splitVesselRegion(const HObject &RegionVesselUnion, HT
         ++(*NumberCenterLines);
     }
 
-    //记录长度
-    LengthXld((*CenterLines), &(*vesselLengths));
+    if(*NumberCenterLines > 0)
+    {
+        //记录长度
+        LengthXld((*CenterLines), &(*vesselLengths));
 
-    //填充封闭区域 生成计算流速用的血管区域
-    FillUp(RegionCenterLineContours, &FillupCenterLineContours);
-    ClosingCircle(FillupCenterLineContours, &ClosingCenterLineContours, InnerRadiusRegionVesselConcat);
-    Intersection(ClosingCenterLineContours, RegionVesselUnion, &(*RegionVesselSplited));
+        //填充封闭区域 生成计算流速用的血管区域
+        FillUp(RegionCenterLineContours, &FillupCenterLineContours);
+        ClosingCircle(FillupCenterLineContours, &ClosingCenterLineContours, InnerRadiusRegionVesselConcat);
+        Intersection(ClosingCenterLineContours, RegionVesselUnion, &(*RegionVesselSplited));
+    }
 }
 
 void HalconInterfaceBase::reSplitVesselRegion(const HObject &RegionVesselUnion, HTuple Width, HTuple Height, const HObject &RegionCenterLines, const HTuple &oriDiameters, HObject *CenterLines, HObject *RegionsSplited, HObject *CenterLineContours, HTuple *NumberCenterLines, HTuple *vesselDiameters, HTuple *vesselLengths)
