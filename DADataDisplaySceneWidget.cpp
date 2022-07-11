@@ -198,9 +198,11 @@ void DADataDisplaySceneWidget::mousePressEvent(QMouseEvent *event)
     {
         for(const RegionPoints& regionPoints : mPtrVesselInfo->regionsSkeletonPoints)
         {
-            QPolygon intersectPolygon(regionPoints);
             QPainterPath intersectPath;
-            intersectPath.addPolygon(intersectPolygon);
+            for(const QPoint& regionPoint : regionPoints)
+            {
+                intersectPath.addEllipse(QRect(regionPoint, QSize(1, 1)));
+            }
             if(intersectPath.intersects(intersectRect))
             {
                 mCurrentChoosenPathItem = &regionPoints;

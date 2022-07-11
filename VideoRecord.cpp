@@ -857,8 +857,8 @@ void VideoRecord::slotExportAllData()
 
             for(int i = 0; i < vesselInfo.vesselNumber; ++i)
             {
-                QString writeRow(", %1, %2, %3, %4\n");
-                writeRow = writeRow.arg(vesselInfo.diameters[i]).arg(vesselInfo.lengths[i]).arg(vesselInfo.flowrates[i]).arg(vesselInfo.glycocalyx[i]);
+                QString writeRow("%1, %2, %3, %4, %5\n");
+                writeRow = writeRow.arg(i + 1).arg(vesselInfo.diameters[i]).arg(vesselInfo.lengths[i]).arg(vesselInfo.flowrates[i]).arg(vesselInfo.glycocalyx[i]);
                 diametersSum += vesselInfo.diameters[i];
                 lengthSum += vesselInfo.lengths[i];
                 flowrateSum += vesselInfo.flowrates[i];
@@ -882,7 +882,17 @@ void VideoRecord::slotExportAllData()
 
     excelFile.close();
 
-    QMessageBox::information(nullptr, QStringLiteral("导出"), QStringLiteral("导出完成"));
+    QMessageBox messageBox(QMessageBox::Icon::Information, QStringLiteral("导出完成"), QStringLiteral("导出完成，是否打开查看？"),
+                           QMessageBox::StandardButton::Ok | QMessageBox::StandardButton::No, nullptr);
+    messageBox.button(QMessageBox::StandardButton::Ok)->setText(QStringLiteral("打开查看"));
+    messageBox.button(QMessageBox::StandardButton::No)->setText(QStringLiteral("不需要"));
+    messageBox.setDefaultButton(QMessageBox::StandardButton::Ok);
+    messageBox.setWindowIcon(QIcon(":/icons/image/icon.ico"));
+    int button = messageBox.exec();
+    if(button == QMessageBox::Ok)
+    {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(excelPath.absoluteFilePath()));
+    }
 }
 
 void VideoRecord::asyncUpdateAvaliableCameras()

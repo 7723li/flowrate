@@ -26,6 +26,34 @@
 #include "ui_DataAnalysis.h"
 #include "ui_VesselPanel.h"
 
+/*!
+ * @brief
+ * 刷新保存数据的线程回收站
+ */
+class AsyncDataReanalyserRecycleBin : public QObject
+{
+    Q_OBJECT
+
+public:
+    static AsyncDataReanalyserRecycleBin& getInstange()
+    {
+        static AsyncDataReanalyserRecycleBin instance;
+        return instance;
+    }
+
+public slots:
+    void slotRecycle(AsyncDataReanalyser* t)
+    {
+        AsyncDataReanalyser* tt = t;
+        qDebug() << "AsyncDataReanalyserRecycleBin::slotRecycle" << tt;
+
+        delete t;
+        t = nullptr;
+
+        qDebug() << "AsyncDataReanalyserRecycleBin::slotRecycle" << tt << "recycle done";
+    }
+};
+
 class DAVesselGraphSceneWidget : public QWidget
 {
     Q_OBJECT
@@ -79,7 +107,7 @@ private slots:
 
     void slotSave();
 
-    void slotReanalysisFinish();
+    void slotReanalysisFinish(AsyncDataReanalyser* t);
 
     void slotVesselPanelConfirm(const QModelIndex& confirmIndex);
 

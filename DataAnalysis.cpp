@@ -113,8 +113,8 @@ void DataAnalysis::closeEvent(QCloseEvent *e)
     if(mDAVesselGraphSceneWidget->isSaving())
     {
         QMessageBox messageBox(QMessageBox::Icon::Warning, QStringLiteral("警告"), QStringLiteral("正在更新保存中 现在关闭会丢失未保存的操作"),
-                               /*QMessageBox::StandardButton::Ok | */QMessageBox::StandardButton::No, nullptr);
-        //messageBox.button(QMessageBox::StandardButton::Ok)->setText(QStringLiteral("依然退出"));
+                               QMessageBox::StandardButton::Ok | QMessageBox::StandardButton::No, nullptr);
+        messageBox.button(QMessageBox::StandardButton::Ok)->setText(QStringLiteral("依然退出"));
         messageBox.button(QMessageBox::StandardButton::No)->setText(QStringLiteral("先等一等"));
         messageBox.setDefaultButton(QMessageBox::StandardButton::No);
         messageBox.setWindowIcon(QIcon(":/icons/image/icon.ico"));
@@ -166,8 +166,8 @@ void DataAnalysis::slotExportData()
     int glycocalyxCount = 0;
     for(int i = 0; i < mVesselInfo.vesselNumber; ++i)
     {
-        QString writeRow(", %1, %2, %3, %4\n");
-        writeRow = writeRow.arg(mVesselInfo.diameters[i]).arg(mVesselInfo.lengths[i]).arg(mVesselInfo.flowrates[i]).arg(mVesselInfo.glycocalyx[i]);
+        QString writeRow("%1, %2, %3, %4, %5\n");
+        writeRow = writeRow.arg(i + 1).arg(mVesselInfo.diameters[i]).arg(mVesselInfo.lengths[i]).arg(mVesselInfo.flowrates[i]).arg(mVesselInfo.glycocalyx[i]);
         diametersSum += mVesselInfo.diameters[i];
         lengthSum += mVesselInfo.lengths[i];
         flowrateSum += mVesselInfo.flowrates[i];
@@ -188,7 +188,17 @@ void DataAnalysis::slotExportData()
 
     excelFile.close();
 
-    QMessageBox::information(nullptr, QStringLiteral("导出"), QStringLiteral("导出完成"));
+    QMessageBox messageBox(QMessageBox::Icon::Information, QStringLiteral("导出完成"), QStringLiteral("导出完成，是否打开查看？"),
+                           QMessageBox::StandardButton::Ok | QMessageBox::StandardButton::No, nullptr);
+    messageBox.button(QMessageBox::StandardButton::Ok)->setText(QStringLiteral("打开查看"));
+    messageBox.button(QMessageBox::StandardButton::No)->setText(QStringLiteral("不需要"));
+    messageBox.setDefaultButton(QMessageBox::StandardButton::Ok);
+    messageBox.setWindowIcon(QIcon(":/icons/image/icon.ico"));
+    int button = messageBox.exec();
+    if(button == QMessageBox::Ok)
+    {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(excelPath.absoluteFilePath()));
+    }
 }
 
 void DataAnalysis::slotSwithDataDisplay()

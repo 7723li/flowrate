@@ -25,14 +25,8 @@ DAVesselGraphSceneWidget::~DAVesselGraphSceneWidget()
 {
     if(mAsyncDataReanalyser)
     {
-        qDebug() << "...";
         disconnect(mAsyncDataReanalyser, &AsyncDataReanalyser::signalReanalysisFinished, this, &DAVesselGraphSceneWidget::slotReanalysisFinish);
-        const static auto lambdaDelateReanlyser = [&](){
-            qDebug() << "delete";
-            delete mAsyncDataReanalyser;
-            mAsyncDataReanalyser = nullptr;
-        };
-        connect(mAsyncDataReanalyser, &AsyncDataReanalyser::signalReanalysisFinished, lambdaDelateReanlyser);
+        connect(mAsyncDataReanalyser, &AsyncDataReanalyser::signalReanalysisFinished, &(AsyncDataReanalyserRecycleBin::getInstange()), &AsyncDataReanalyserRecycleBin::slotRecycle);
     }
 
     delete mVesselPanel;
@@ -150,9 +144,11 @@ void DAVesselGraphSceneWidget::mousePressEvent(QMouseEvent *e)
         int searchVesselIndex = 0;
         for(RegionPoints& regionPoints : mPtrVesselInfo->regionsSkeletonPoints)
         {
-            QPolygon intersectPolygon(regionPoints);
             QPainterPath intersectPath;
-            intersectPath.addPolygon(intersectPolygon);
+            for(const QPoint& regionPoint : regionPoints)
+            {
+                intersectPath.addEllipse(QRect(regionPoint, QSize(1, 1)));
+            }
             if(intersectPath.intersects(intersectRect))
             {
                 mChoosenVesselIndex = searchVesselIndex;
@@ -506,13 +502,12 @@ void DAVesselGraphSceneWidget::slotSave()
     mAsyncDataReanalyser->start();
 }
 
-void DAVesselGraphSceneWidget::slotReanalysisFinish()
+void DAVesselGraphSceneWidget::slotReanalysisFinish(AsyncDataReanalyser* t)
 {
-    *mPtrVesselInfo = std::move(mAsyncDataReanalyser->getNewVesselInfo());
-    delete mAsyncDataReanalyser;
-    mAsyncDataReanalyser = nullptr;
-
-    qDebug() << mPtrVesselInfo->vesselNumber;
+    *mPtrVesselInfo = std::move(t->getNewVesselInfo());
+    delete t;
+    t = nullptr;
+    mAsyncDataReanalyser = t;
 
     QEventLoop little_trick_to_little_prick;//一些给"好伙伴(们)"的小窍门 嘻嘻
     bool saveSuccess = true;

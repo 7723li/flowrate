@@ -13,6 +13,7 @@
 #include <QScrollArea>
 #include <QKeyEvent>
 #include <QWheelEvent>
+#include <QDesktopServices>
 
 #include "ui_DataAnalysis.h"
 

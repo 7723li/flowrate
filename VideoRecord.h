@@ -7,6 +7,7 @@
 #include <QKeyEvent>
 #include <QDir>
 #include <QFileInfo>
+#include <QDesktopServices>
 
 #include "ui_VideoRecord.h"
 

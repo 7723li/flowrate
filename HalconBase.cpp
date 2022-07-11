@@ -734,9 +734,7 @@ void HalconInterfaceBase::reSplitVesselRegion(const HObject &RegionVesselUnion, 
                 ConcatObj(*CenterLines, line, CenterLines);
             }
         }
-//        GenContourRegionXld(SplitedRegionCenterLines, &TempCenterLines, "center");
-//        ConcatObj(*CenterLines, TempCenterLines, CenterLines);
-//        LengthXld(TempCenterLines, &TempVesselLengths);
+
         *vesselLengths = vesselLengths->TupleConcat(TempVesselLengths);
 
         //填充封闭区域 生成计算流速用的血管区域

@@ -196,6 +196,6 @@ void AsyncDataReanalyser::run()
 {
     VesselAlgorithm::reCalculateAll(mImagelist, mPixelSize, mMagnification, mFps, mErasedOriVesselIndex, mOriVesselInfo, mNewVesselInfo);
 
-    emit signalReanalysisFinished();
+    emit signalReanalysisFinished(this);
 }
 /**********AsyncDataReanalyser**********/

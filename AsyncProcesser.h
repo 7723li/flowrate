@@ -151,14 +151,14 @@ protected:
     virtual void run() override;
 
 signals:
-    void signalReanalysisFinished();
+    void signalReanalysisFinished(AsyncDataReanalyser*);
 
 private:
-    const QVector<QImage>& mImagelist;
+    QVector<QImage> mImagelist;
     double mFps;
     double mPixelSize;
     int mMagnification;
-    const QVector<int>& mErasedOriVesselIndex;
-    const VesselInfo& mOriVesselInfo;
+    QVector<int> mErasedOriVesselIndex;
+    VesselInfo mOriVesselInfo;
     VesselInfo mNewVesselInfo;
 };
