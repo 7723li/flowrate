@@ -256,18 +256,15 @@ void VideoRecord::beginRecord()
 
         mRecordBeginDateTime = QDateTime::currentDateTime();
 
-        if(mContinueRecordVideoCount <= 1)
+        if(!mUI.checkBoxAutoRecord->isChecked())
         {
-            if(!mUI.checkBoxAutoRecord->isChecked())
-            {
-                mUI.begin_stop_record_stack->setCurrentWidget(mUI.page_stop_record_btn);
-            }
-
-            mUI.checkBoxAutoRecord->setEnabled(false);
-            mUI.continueRecordNum->setEnabled(false);
-
-            mRecordTimeLimitTimer.start();
+            mUI.begin_stop_record_stack->setCurrentWidget(mUI.page_stop_record_btn);
         }
+
+        mUI.checkBoxAutoRecord->setEnabled(false);
+        mUI.continueRecordNum->setEnabled(false);
+
+        mRecordTimeLimitTimer.start();
     }
 }
 
@@ -280,17 +277,14 @@ void VideoRecord::stopRecord()
 
     mVideoRecorder->stopRecord();
 
-    if(mContinueRecordVideoCount <= 1)
+    mRecordTimeLimitTimer.stop();
+
+    mUI.checkBoxAutoRecord->setEnabled(true);
+    mUI.continueRecordNum->setEnabled(true);
+
+    if(!mUI.checkBoxAutoRecord->isChecked())
     {
-        mRecordTimeLimitTimer.stop();
-
-        mUI.checkBoxAutoRecord->setEnabled(true);
-        mUI.continueRecordNum->setEnabled(true);
-
-        if(!mUI.checkBoxAutoRecord->isChecked())
-        {
-            mUI.begin_stop_record_stack->setCurrentWidget(mUI.page_begin_record_btn);
-        }
+        mUI.begin_stop_record_stack->setCurrentWidget(mUI.page_begin_record_btn);
     }
 
     insertOneVideoRecord();
@@ -557,6 +551,7 @@ void VideoRecord::slotDisplaySharpnessAndAutoRecord(double sharpness, bool isSha
                     --mContinueRecordVideoCount;
                     beginRecord();
                     mAutoRecordTimeLimitTimer.start();
+                    mUI.residueRecordCount->setText(QStringLiteral("剩余录制数量：%1").arg(mContinueRecordVideoCount));
                 }
                 else
                 {
@@ -583,6 +578,9 @@ void VideoRecord::slotAutoRecordChecked(int status)
     {
         mUI.continueRecordNum->setEnabled(false);
         mUI.begin_stop_record_stack->setEnabled(false);
+
+        mContinueRecordVideoCount = mUI.continueRecordNum->currentText().toInt();
+        mUI.residueRecordCount->setText(QStringLiteral("剩余录制数量：%1").arg(mContinueRecordVideoCount));
     }
     else
     {
@@ -594,6 +592,7 @@ void VideoRecord::slotAutoRecordChecked(int status)
 void VideoRecord::slotContinueRecordNumChanged(const QString& number)
 {
     mContinueRecordVideoCount = number.toInt();
+    mUI.residueRecordCount->setText(QStringLiteral("剩余录制数量：%1").arg(mContinueRecordVideoCount));
 }
 
 void VideoRecord::slotEnterDataAnalysis(QTableWidgetItem *videorecordItem)
