@@ -8,7 +8,7 @@
 <l>pathloop:=false</l>
 <c></c>
 <l>samplepaths('D:/codes/PicAndTemplate/', paths)</l>
-<l>path:='D:/codes/PicAndTemplate/微循环测试视频/images/20210607161929cut_7183_7304/'</l>
+<l>path:='D:/codes/PicAndTemplate/V1001559/'</l>
 <l>tuple_find(paths, path, PathIndex)</l>
 <c></c>
 <c>* 这个循环是专门刷数据用的</c>
@@ -75,6 +75,8 @@
 <c>* 将完整的血管区域移动回跟首帧重叠</c>
 <l>align_antishake_region (RegionVesselConcat, RegionAlignVesselConcat, 1, 10, TupleTranPrevToRearRows, TupleTranPrevToRearCols, 'region')</l>
 <l>union1(RegionAlignVesselConcat, UnionRegionVessel)</l>
+<l>gen_rectangle1(Rectangle, 0, 0, Height-1, Width-1)</l>
+<l>intersection(UnionRegionVessel, Rectangle, UnionRegionVessel)</l>
 <c></c>
 <c>* 血管区域图形分段</c>
 <l>split_vessel_region (UnionRegionVessel, CenterLines, RegionVesselSplited, CenterLineContours, Width, Height, NumberCenterLines, VesselDiameters, VesselLengths)</l>
@@ -82,7 +84,6 @@
 <l>    disp_message(WindowHandle, 'There is no available blood vessel!', 'window', Height/2, Width/2, 'black', 'true')</l>
 <l>    return()</l>
 <l>endif</l>
-<c></c>
 <c></c>
 <c>***************************************糖萼***************************************</c>
 <l>calculate_glycocalyx (CenterLines, RegionVesselConcat, NumberCenterLines, TupleTranPrevToRearRows, TupleTranPrevToRearCols, 5.6, 5, glycocalyx)</l>
@@ -219,7 +220,14 @@
 <l>endif</l>
 <c></c>
 <l>try</l>
+<c>    * 无论原图像分辨率是多少 都先强制将图像缩放至(480, 480)方便计算 计算完毕后再将区域与原分辨率缩放匹配</c>
+<l>    zoom_image_size(ImageOri, ImageZoom, 480, 480, 'constant')        </l>
+<l>    intensity(ImageZoom, ImageZoom,Mean, Deviation)</l>
+<l>    MaskSize:=round(Deviation/(Mean/Deviation))</l>
+<l>    emphasize(ImageZoom, ImageEmphasize, MaskSize, MaskSize, 2)</l>
+<c>    </c>
 <l>    gauss_filter (ImageOri, ImageGauss, 7)</l>
+<l>    gauss_filter (ImageEmphasize, ImageGaussCalc, 7)</l>
 <l>catch (Exception)</l>
 <l>    ImageGauss:=ImageOri</l>
 <l>    gen_region_points(RegionUnion, [], [])</l>
@@ -227,20 +235,18 @@
 <l>endtry</l>
 <c></c>
 <c>* 寻找血管区域 均值滤波+动态阈值</c>
-<l>mean_image(ImageGauss, ImageMean, 43, 43)</l>
-<l>dyn_threshold(ImageGauss, ImageMean, RegionDynThresh, 9, 'dark')</l>
+<l>mean_image(ImageGaussCalc, ImageMean, 23, 23)</l>
+<l>dyn_threshold(ImageGaussCalc, ImageMean, RegionDynThresh, 9, 'dark')</l>
 <c></c>
 <c>* 闭运算补小洞</c>
-<l>closing_circle(RegionDynThresh, RegionClosing, 3)</l>
-<c></c>
-<l>* erosion_circle(RegionClosing, RegionErosion, 1.5)</l>
+<l>closing_circle(RegionDynThresh, RegionClosing, 2.5)</l>
 <c></c>
 <c>* 分散出若干个连接起来的区域 大部分大概率是血管区域</c>
 <l>connection(RegionClosing, RawRegionConnected)</l>
 <c></c>
 <c>* 根据面积筛选掉噪音</c>
 <l>area_center(RawRegionConnected, AreaRawRegionConnected, useless, useless)</l>
-<l>MinArea := 50</l>
+<l>MinArea := 20</l>
 <l>tuple_max(AreaRawRegionConnected, MaxArea)</l>
 <l>if(MaxArea &lt; MinArea)</l>
 <l>    MinArea := 0</l>
@@ -249,6 +255,11 @@
 <c></c>
 <c>* 合并 检测到的分散血管区域 后面有用</c>
 <l>union1(RegionConnected, RegionUnion)</l>
+<c></c>
+<c>* 将血管区域与原分辨率缩放匹配</c>
+<l>hom_mat2d_identity(HomMat2DIdentity)</l>
+<l>hom_mat2d_scale(HomMat2DIdentity, real(Height)/480.0, real(Width)/480.0, 0, 0, HomMat2DScale)</l>
+<l>affine_trans_region(RegionUnion, RegionUnion, HomMat2DScale, 'constant')</l>
 <c></c>
 <l>return ()</l>
 </body>
@@ -274,56 +285,48 @@
 <l>Sharpness:=0</l>
 <l>IsSharp:=false</l>
 <c></c>
-<c>* 计算图像整体的灰度方差</c>
-<l>get_image_size(ImageOri, Width, Height)</l>
-<l>gen_rectangle1(Rectangle, 0, 0, Height-1, Width-1)</l>
-<l>intensity(Rectangle, ImageOri, Mean, Deviation)</l>
+<l>try</l>
+<c>    * 无论原图像分辨率是多少 都先强制将图像缩放至(640, 640)方便计算</c>
+<l>    zoom_image_size(ImageOri, ImageZoom, 640, 640, 'constant')</l>
+<l>    emphasize(ImageZoom, ImageEmphasize, 23, 23, 2)</l>
+<l>catch (Exception)</l>
+<l>    return()</l>
+<l>endtry</l>
 <c></c>
-<l>if(Deviation&gt;0)</l>
-<c>    * 根据灰度方差进行对比度强化 如果灰度方差大 说明原来的对比度较高 则强化的程度可以降低 反之亦然</c>
-<c>    * 强化完成后做一次小型模糊 弱化噪点</c>
-<l>    try</l>
-<l>        emphasize(ImageOri, ImageEmphasize, 255.0/Deviation, 255.0/Deviation, 1)</l>
-<l>    catch (Exception)</l>
-<l>        return()</l>
-<l>    endtry</l>
-<l>    gauss_filter(ImageEmphasize, ImageGauss, 3)</l>
+<c>* canny计算并提取图像上的边缘</c>
+<l>edges_image(ImageEmphasize, ImaAmp, ImaDir, 'canny', 1, 'nms', 5, 8)</l>
+<l>mean_image(ImaAmp, ImageMean, 43 ,43)</l>
+<l>dyn_threshold(ImaAmp, ImageMean, RegionDynThresh, 5, 'light')</l>
+<c></c>
+<c>* 提取出的边缘必须起码符合有10条以上大于等于100px 否则直接判断为模糊</c>
+<l>connection(RegionDynThresh, ConnectedRegions)</l>
+<l>area_center(ConnectedRegions, Area2, useless, useless)</l>
+<l>tuple_max(Area2, Max)</l>
+<l>if(Max&gt;=100)</l>
+<l>    select_shape(ConnectedRegions, SelectedRegions, 'area', 'and', 100, Max)</l>
 <c>    </c>
-<c>    * canny计算并提取图像上的边缘</c>
-<l>    edges_image(ImageGauss, ImaAmp, ImaDir, 'canny', 1, 'nms', 5, 8)</l>
-<l>    mean_image(ImaAmp, ImageMean, 43 ,43)</l>
-<l>    dyn_threshold(ImaAmp, ImageMean, RegionDynThresh, 5, 'light')</l>
+<l>    count_obj(SelectedRegions, Number)</l>
+<l>    if(Number&gt;=10)</l>
+<l>        union1(SelectedRegions, RegionUnion)</l>
 <c>    </c>
-<c>    * 提取出的边缘必须起码符合有10条以上大于等于100px 否则直接判断为模糊</c>
-<l>    connection(RegionDynThresh, ConnectedRegions)</l>
-<l>    area_center(ConnectedRegions, Area2, useless, useless)</l>
-<l>    tuple_max(Area2, Max)</l>
-<l>    if(Max&gt;=100)</l>
-<l>        select_shape(ConnectedRegions, SelectedRegions, 'area', 'and', 100, Max)</l>
+<c>        * 用边缘和边缘骨架的像素之商作为清晰度评分</c>
+<c>        * 约清晰 评分约接近1 但永远不低于1</c>
+<l>        skeleton(RegionUnion, Skeleton)</l>
+<l>        area_center(RegionUnion, Area, useless, useless)</l>
+<l>        area_center(Skeleton, Area1, useless, useless)</l>
 <c>        </c>
-<l>        count_obj(SelectedRegions, Number)</l>
-<l>        if(Number&gt;=10)</l>
-<l>            union1(SelectedRegions, RegionUnion)</l>
-<c>        </c>
-<c>            * 用边缘和边缘骨架的像素之商作为清晰度评分</c>
-<c>            * 约清晰 评分约接近1 但永远不低于1</c>
-<l>            skeleton(RegionUnion, Skeleton)</l>
-<l>            area_center(RegionUnion, Area, useless, useless)</l>
-<l>            area_center(Skeleton, Area1, useless, useless)</l>
-<c>            </c>
-<l>            if(Area&gt;0 and Area1&gt;0)</l>
-<l>                Sharpness:=real(Area)/real(Area1)</l>
-<l>            else</l>
-<l>                Sharpness:=0</l>
-<l>            endif</l>
+<l>        if(Area&gt;0 and Area1&gt;0)</l>
+<l>            Sharpness:=real(Area)/real(Area1)</l>
+<l>        else</l>
+<l>            Sharpness:=0</l>
 <l>        endif</l>
 <l>    endif</l>
-<c>    </c>
-<l>    if(Sharpness &gt;= 1.0)</l>
-<l>        IsSharp := true</l>
-<l>    else</l>
-<l>        IsSharp := false</l>
-<l>    endif</l>
+<l>endif</l>
+<c></c>
+<l>if(Sharpness &gt;= 1.0)</l>
+<l>    IsSharp := true</l>
+<l>else</l>
+<l>    IsSharp := false</l>
 <l>endif</l>
 <c></c>
 <l>return ()</l>
@@ -2192,18 +2195,12 @@
 <c>* ////////////////////////////////////////////////////////////////////////////////// *</c>
 <c>* </c>
 <c>* @note</c>
-<c>* 红细胞流速(um/s) = 流动轨迹距离 / 前后帧时间差(s) * 像素尺寸(um/px) / 放大倍率</c>
+<c>* 红细胞流速(um/s) = 像素灰度变化趋势 / 前后帧时间差(s) * 像素尺寸(um/px) / 放大倍率</c>
 <c>*</c>
-<c>* 令血管骨架长度为血管总长度 则可认为血管总长度为血管内可流动的最大距离</c>
-<c>* 可推算 流动轨迹距离 = 血管骨架上的流动面积</c>
-<c>*</c>
-<c>* 除以两帧之间的时间差 等价于帧率相乘代替</c>
-<c>*</c>
-<c>* 即 红细胞流速(um/s) = 血管骨架上的流动面积 * 帧率 * 像素尺寸(um/px) / 放大倍率</c>
+<c>* 像素灰度变化趋势 = mean(pow(区域内前帧灰度 - 区域内后帧灰度, 2))</c>
+<c>* 可以理解为区域内逐个像素对比 灰度变化值的变化越大 流速就越大</c>
 <c>* </c>
 <c>* ////////////////////////////////////////////////////////////////////////////////// *</c>
-<l>skeleton(RegionVesselSplited, SkeletonRegionVesselSplited)</l>
-<l>union1(SkeletonRegionVesselSplited, UnionSkeletonRegionVesselSplited)</l>
 <c></c>
 <l>count_obj(ImageGaussAlignConcat, NumberImageAlgoithmCommonConcat)</l>
 <l>if(NumberImageAlgoithmCommonConcat&gt;25)</l>
@@ -2220,22 +2217,22 @@
 <l>    select_obj(ImageGaussAlignConcat, ImageAlgoithmCommonPrev, I)</l>
 <l>    select_obj(ImageGaussAlignConcat, ImageAlgoithmCommonRear, I+1)</l>
 <c>    </c>
-<c>    * 计算流动轨迹</c>
-<c>    * 注：用前后帧防抖后的共同区域 而非之前的合并区域进行计算 避免防抖造成的数据误差</c>
-<c>    * 注2：红细胞体现为低灰度 因此需要将图片反色 相减后得出的才是后帧的红细胞</c>
-<l>    reduce_domain(ImageAlgoithmCommonPrev, UnionSkeletonRegionVesselSplited, ImageVesselPrev)</l>
-<l>    reduce_domain(ImageAlgoithmCommonRear, UnionSkeletonRegionVesselSplited, ImageVesselRear)</l>
+<l>    TrackArea:=[]</l>
+<l>    count_obj(RegionVesselSplited, NumberRegionVesselSplited)</l>
+<l>    for J:=1 to NumberRegionVesselSplited by 1</l>
+<l>        select_obj(RegionVesselSplited, RegionVessel, J)</l>
+<l>        get_region_points(RegionVessel, RowsRegionVessel, ColsRegionVessel)</l>
+<l>        if(|RowsRegionVessel| and |ColsRegionVessel|)</l>
+<l>            get_grayval(ImageAlgoithmCommonPrev, RowsRegionVessel, ColsRegionVessel, GrayvalAlgoithmCommonPrev)</l>
+<l>            get_grayval(ImageAlgoithmCommonRear, RowsRegionVessel, ColsRegionVessel, GrayvalAlgoithmCommonReal)</l>
+<l>            GrayvalDiff:=pow(GrayvalAlgoithmCommonPrev-GrayvalAlgoithmCommonReal, 2)</l>
+<l>            tuple_mean(GrayvalDiff, GrayvalDiffMean)</l>
+<l>            TrackArea:=[TrackArea, GrayvalDiffMean]</l>
+<l>        else</l>
+<l>            TrackArea:=[TrackArea, 0]</l>
+<l>        endif</l>
+<l>    endfor</l>
 <c>    </c>
-<l>    invert_image(ImageVesselPrev, ImageVesselPrevInvert)</l>
-<l>    invert_image(ImageVesselRear, ImageVesselRearInvert)</l>
-<c>    </c>
-<l>    sub_image(ImageVesselRear, ImageVesselPrev, ImageFlowMotion, 1, 0)    </l>
-<l>    mean_image(ImageFlowMotion, ImageFlowMotionMean, 23, 23)</l>
-<l>    dyn_threshold(ImageFlowMotion, ImageFlowMotionMean, UnionRegionFlowMotion, 5, 'light')</l>
-<c>    </c>
-<l>    intersection(SkeletonRegionVesselSplited, UnionRegionFlowMotion, RegionFlowMotion)</l>
-<c>    </c>
-<l>    area_center(RegionFlowMotion, TrackArea, useless, useless)</l>
 <l>    if(|TrackArea|)</l>
 <l>        TrackAreas:=TrackAreas+TrackArea</l>
 <c>        </c>

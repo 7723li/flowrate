@@ -231,7 +231,7 @@ void VesselAlgorithm::calculateAll(const QVector<QImage> &imagelist, double pixe
      */
 
     HObject imagelistObj, RegionVesselConcat, ImageGaussConcat, RegionAlignVesselConcat, UnionRegionVessel;
-    HObject CenterLines, RegionVesselSplited, CenterLineContours, RegionSelected;
+    HObject CenterLines, RegionVesselSplited, CenterLineContours, RegionSelected, Rectangle;
 
     HTuple NumberCenterLines, vesselDiameters, vesselLengts;
     HTuple TupleProcessImageIndex, TupleTranPrevToRearRows, TupleTranPrevToRearCols;
@@ -264,6 +264,8 @@ void VesselAlgorithm::calculateAll(const QVector<QImage> &imagelist, double pixe
     // 将完整的血管区域移动回跟首帧重叠
     HalconInterfaceBase::alignAntishakeRegion(RegionVesselConcat, &RegionAlignVesselConcat, 1, 10, TupleTranPrevToRearRows, TupleTranPrevToRearCols, "region");
     Union1(RegionAlignVesselConcat, &UnionRegionVessel);
+    GenRectangle1(&Rectangle, 0, 0, imagelist.front().height() - 1, imagelist.front().width() - 1);
+    Intersection(UnionRegionVessel, Rectangle, &UnionRegionVessel);
 
     // 血管区域图形分段
     HalconInterfaceBase::splitVesselRegion(UnionRegionVessel, imagelist.front().width(), imagelist.front().height(), &CenterLines, &RegionVesselSplited, &CenterLineContours, &NumberCenterLines, &vesselDiameters, &vesselLengts);
@@ -375,7 +377,7 @@ void VesselAlgorithm::reCalculateAll(const QVector<QImage> &imagelist, double pi
 
     HObject imagelistObj, RegionVesselConcat, ImageGaussConcat, RegionAlignVesselConcat, UnionRegionVessel;
     HObject RegionCenterLine, RegionCenterLines, CenterLines, RegionVesselSplited, CenterLineContours, RegionSelected;
-    HObject EraseSplitRegionCenterLines;
+    HObject EraseSplitRegionCenterLines, Rectangle;
 
     HTuple NumberCenterLines, vesselDiameters, vesselLengths, PhiRegionCenterLines;
     HTuple TupleProcessImageIndex, TupleTranPrevToRearRows, TupleTranPrevToRearCols;
@@ -409,6 +411,8 @@ void VesselAlgorithm::reCalculateAll(const QVector<QImage> &imagelist, double pi
     // 将完整的血管区域移动回跟首帧重叠
     HalconInterfaceBase::alignAntishakeRegion(RegionVesselConcat, &RegionAlignVesselConcat, 1, 10, TupleTranPrevToRearRows, TupleTranPrevToRearCols, "region");
     Union1(RegionAlignVesselConcat, &UnionRegionVessel);
+    GenRectangle1(&Rectangle, 0, 0, imagelist.front().height() - 1, imagelist.front().width() - 1);
+    Intersection(UnionRegionVessel, Rectangle, &UnionRegionVessel);
 
     {
         /*!

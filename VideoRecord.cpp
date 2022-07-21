@@ -4,9 +4,9 @@ VideoRecord::VideoRecord(QWidget *parent)
     : QWidget(parent),
     mUsingCamera(nullptr), mIsCameraOpen(false), mIsCameraCapturing(false),
     mLib("GenericCameraModule.dll"), mCommonFuncPtr(nullptr), mRuntimeFramerateFuncPtr(nullptr), mCameraParamWidget(new CameraParamWidget(mLib)),
-    mFrameWidth(0), mFrameHeight(0), mPixelByteCount(0), mMagnification(0), mPixelSize(0.0), mImageSize(0), mVideoRecorder(new AsyncVideoRecorder(mVideoWriter)),
-    mConfigFramerate(0.0), mRunningFramerate(0.0), mLastSecondRecvFrameCount(0), mLastSecondRecvFrameCountDisplay(0), mIsUpdatingCameraList(false),
-    mShowDebugMessage(true), mContinueSharpFrameCount(0), mContinueRecordVideoCount(1), mFlowTrackCalculatingNumer(0)
+    mFrameWidth(0), mFrameHeight(0), mPixelByteCount(0), mMagnification(0), mPixelSize(0.0), mImageSize(0), mRealTimeVideoRecorder(new AsyncVideoRecorder(mVideoWriter)),
+    mAutoVideoRecorder(new AsyncVideoAutoRecorder(mVideoWriter)), mConfigFramerate(0.0), mRunningFramerate(0.0), mLastSecondRecvFrameCount(0),
+    mLastSecondRecvFrameCountDisplay(0), mIsUpdatingCameraList(false), mShowDebugMessage(true), mContinueSharpFrameCount(0), mContinueRecordVideoCount(1), mFlowTrackCalculatingNumer(0)
 {
     qDebug() << "lib.load GenericCameraModule.dll" << mLib.load();
 
@@ -41,17 +41,11 @@ VideoRecord::VideoRecord(QWidget *parent)
     mGetRuntimeFramerateTimer.setInterval(1000);
     connect(&mGetRuntimeFramerateTimer, &QTimer::timeout, this, &VideoRecord::slotRefreshFramerate);
 
-    mSharpnessTimer.setInterval(25);
-    connect(&mSharpnessTimer, &QTimer::timeout, this, &VideoRecord::slotCalcSharpness);
     connect(&mSharpnseeCalculator, &AsyncSharpnessCalculator::signalCalcSharpnessFinish, this, &VideoRecord::slotDisplaySharpnessAndAutoRecord);
 
     mRecordTimeLimitTimer.setInterval(60 * 60 * 1000);
     mRecordTimeLimitTimer.setSingleShot(true);
     connect(&mRecordTimeLimitTimer, &QTimer::timeout, this, &VideoRecord::stopRecord);
-
-    mAutoRecordTimeLimitTimer.setInterval(1100);
-    mAutoRecordTimeLimitTimer.setSingleShot(true);
-    connect(&mAutoRecordTimeLimitTimer, &QTimer::timeout, this, &VideoRecord::stopRecord);
 
     mLoopCalcFlowTrackTimer.setInterval(1000);
     connect(&mLoopCalcFlowTrackTimer, &QTimer::timeout, this, &VideoRecord::slotLoopCheckDataAnalysis);
@@ -63,7 +57,11 @@ VideoRecord::VideoRecord(QWidget *parent)
 
 VideoRecord::~VideoRecord()
 {
+    delete mRealTimeVideoRecorder;
+    mRealTimeVideoRecorder = nullptr;
 
+    delete mAutoVideoRecorder;
+    mAutoVideoRecorder = nullptr;
 }
 
 bool VideoRecord::openCamera()
@@ -158,11 +156,13 @@ void VideoRecord::beginCapture()
         if (mPixelByteCount == 1)
         {
             mRecvImage = QImage(mFrameWidth, mFrameHeight, QImage::Format::Format_Grayscale8);
+            mSharpnseeCalculator.setImageFormat(mFrameWidth, mFrameHeight, mImageSize, QImage::Format::Format_Grayscale8);
             mMat = cv::Mat(mFrameHeight, mFrameWidth, CV_8UC1);
         }
         else if (mPixelByteCount == 3)
         {
             mRecvImage = QImage(mFrameWidth, mFrameHeight, QImage::Format::Format_RGB888);
+            mSharpnseeCalculator.setImageFormat(mFrameWidth, mFrameHeight, mImageSize, QImage::Format::Format_Grayscale8);
             mMat = cv::Mat(mFrameHeight, mFrameWidth, CV_8UC3);
         }
 
@@ -177,7 +177,7 @@ void VideoRecord::beginCapture()
 
         mGetRuntimeFramerateTimer.start();
 
-        mSharpnessTimer.start();
+        mSharpnseeCalculator.begin();
 
         mIsCameraCapturing = true;
     }
@@ -192,7 +192,7 @@ void VideoRecord::stopCaptutre()
         mCommonFuncPtr = mLib.resolve("stopCapture");
         ((captureFunc*)mCommonFuncPtr)(mUsingCamera);
 
-        mSharpnessTimer.stop();
+        mSharpnseeCalculator.stop();
 
         mCameraParamWidget->switchCameraUncapturingStyle();
 
@@ -248,11 +248,11 @@ void VideoRecord::beginRecord()
     mRecordVideoAbsFileInfo.setFile(tDir, tFormatVideoname + ".avi");
 
     bool opened = mVideoWriter.open(mRecordVideoAbsFileInfo.absoluteFilePath().toStdString().c_str(), CV_FOURCC('M', 'J', 'P', 'G'), mConfigFramerate, cv::Size(mFrameWidth, mFrameHeight), (mPixelByteCount != 1));
-    qDebug() << mRecordVideoAbsFileInfo.absoluteFilePath() << "_mVideoWriter.isOpened()" << opened << mConfigFramerate << mFrameWidth << mFrameHeight << mPixelByteCount;
+    qDebug() << "RealTime Record: " << mRecordVideoAbsFileInfo.absoluteFilePath() << "mVideoWriter opened" << opened << mConfigFramerate << mFrameWidth << mFrameHeight << mPixelByteCount;
 
     if (mVideoWriter.isOpened())
     {
-        mVideoRecorder->startRecord();
+        mRealTimeVideoRecorder->startRecord();
 
         mRecordBeginDateTime = QDateTime::currentDateTime();
 
@@ -261,21 +261,18 @@ void VideoRecord::beginRecord()
             mUI.begin_stop_record_stack->setCurrentWidget(mUI.page_stop_record_btn);
         }
 
-        mUI.checkBoxAutoRecord->setEnabled(false);
-        mUI.continueRecordNum->setEnabled(false);
-
         mRecordTimeLimitTimer.start();
     }
 }
 
 void VideoRecord::stopRecord()
 {
-    if (!mVideoWriter.isOpened() || !mVideoRecorder->recording())
+    if (!mVideoWriter.isOpened() || !mRealTimeVideoRecorder->recording())
     {
         return;
     }
 
-    mVideoRecorder->stopRecord();
+    mRealTimeVideoRecorder->stopRecord();
 
     mRecordTimeLimitTimer.stop();
 
@@ -290,6 +287,62 @@ void VideoRecord::stopRecord()
     insertOneVideoRecord();
 }
 
+void VideoRecord::beginAutoRecord()
+{
+    if (mVideoWriter.isOpened() || mAutoVideoRecorder->recording())
+    {
+        return;
+    }
+
+    mRecordDuratiom.setHMS(0, 0, 0, 0);
+
+    QString tFormatVideoname = QDateTime::currentDateTime().toString("yyyyMMddhhmmss");
+
+    QDir tDir = QDir::currentPath();
+    if (!tDir.cdUp() || !tDir.cd("data"))
+    {
+        return;
+    }
+
+    if (!tDir.exists(tFormatVideoname))
+    {
+        if (tDir.mkdir(tFormatVideoname))
+        {
+            if (!tDir.cd(tFormatVideoname))
+            {
+                return;
+            }
+        }
+        else
+        {
+            return;
+        }
+    }
+    else if (!tDir.cd(tFormatVideoname))
+    {
+        return;
+    }
+
+    mRecordVideoAbsFileInfo.setFile(tDir, tFormatVideoname + ".avi");
+
+    bool opened = mVideoWriter.open(mRecordVideoAbsFileInfo.absoluteFilePath().toStdString().c_str(), CV_FOURCC('M', 'J', 'P', 'G'), mConfigFramerate, cv::Size(mFrameWidth, mFrameHeight), (mPixelByteCount != 1));
+    qDebug() << "Auto Record:" << mRecordVideoAbsFileInfo.absoluteFilePath() << "mVideoWriter opened" << opened << mConfigFramerate << mFrameWidth << mFrameHeight << mPixelByteCount;
+
+    if (mVideoWriter.isOpened())
+    {
+        mUI.checkBoxAutoRecord->setEnabled(false);
+        mUI.continueRecordNum->setEnabled(false);
+
+        mAutoVideoRecorder->startRecord(mAutoRecordCacheQueue);
+
+        mUI.checkBoxAutoRecord->setEnabled(true);
+        mUI.continueRecordNum->setEnabled(true);
+
+        mRecordDuratiom.setHMS(0, 0, 1);
+        insertOneVideoRecord();
+    }
+}
+
 void VideoRecord::processOneFrame(const _Fake_Mat &m)
 {
     if (mIsCameraCapturing && m.data)
@@ -298,12 +351,14 @@ void VideoRecord::processOneFrame(const _Fake_Mat &m)
 
         memcpy(mMat.data, m.data, mImageSize);
 
-        if (mVideoRecorder->recording())
+        if (mRealTimeVideoRecorder->recording())
         {
-            mVideoRecorder->cache(mMat);
+            mRealTimeVideoRecorder->cache(mMat);
 
             updateRecordTime();
         }
+
+        mSharpnseeCalculator.cache(mMat);
     }
 }
 
@@ -402,8 +457,8 @@ void VideoRecord::closeEvent(QCloseEvent *e)
 
     qDebug() << "lib.unload CameraObject.dll" << mLib.unload();
 
-    delete mVideoRecorder;
-    mVideoRecorder = nullptr;
+    delete mRealTimeVideoRecorder;
+    mRealTimeVideoRecorder = nullptr;
 
     delete mCameraParamWidget;
     mCameraParamWidget = nullptr;
@@ -525,32 +580,70 @@ void VideoRecord::slotRefreshFramerate()
     }
 }
 
-void VideoRecord::slotCalcSharpness()
+void VideoRecord::slotDisplaySharpnessAndAutoRecord(cv::Mat mat, ImageParamQuality sharpnessQuality)
 {
-    QImage image = mRecvImage;
-    mSharpnseeCalculator.cache(image);
-}
+    static const QString sQualityStylesheetColor[]
+            = {"background-color: rgb(8,255,57);border-radius:6px;", "background-color: yellow;border-radius:6px;", "background-color: red;border-radius:6px;"};
 
-void VideoRecord::slotDisplaySharpnessAndAutoRecord(double sharpness, bool isSharp)
-{
-    static const QString tips[] = {QStringLiteral("是"), QStringLiteral("否")};
-
-    mUI.sharpness->setText(QString::number(sharpness, 'g', 3));
-    if(isSharp)
+    /*!
+     * @brief
+     * 对焦
+     */
+    mUI.sharpnessQuality->setStyleSheet(sQualityStylesheetColor[sharpnessQuality]);
+    if(sharpnessQuality == ImageParamQuality::Low)
     {
-        mUI.isSharp->setText(tips[0]);
-
-        if(!mVideoWriter.isOpened() && !mVideoRecorder->recording() && mUI.checkBoxAutoRecord->isChecked())
+        mAutoRecordCacheQueue.clear();
+        mContinueSharpFrameCount = 0;
+    }
+    else
+    {
+        mAutoRecordCacheQueue.push_back(mat);
+        if(mAutoRecordCacheQueue.size() > mConfigFramerate)
         {
-            ++mContinueSharpFrameCount;
-            if(mContinueSharpFrameCount >= 10)
+            mAutoRecordCacheQueue.pop_front();
+        }
+        ++mContinueSharpFrameCount;
+    }
+
+    /*!
+     * @brief
+     * 清晰(对焦中质量及以上)的持续时间 如果有连续设定帧率及以上帧数清晰 才认定持续时间为高质量
+     */
+    ImageParamQuality sharpnessDurationQuality;
+    if(mContinueSharpFrameCount >= mConfigFramerate)
+    {
+        sharpnessDurationQuality = ImageParamQuality::High;
+        mUI.sharpnessDurationQuality->setStyleSheet(sQualityStylesheetColor[ImageParamQuality::High]);
+    }
+    else
+    {
+        sharpnessDurationQuality = ImageParamQuality::Low;
+        mUI.sharpnessDurationQuality->setStyleSheet(sQualityStylesheetColor[ImageParamQuality::Low]);
+    }
+
+    /*!
+     * @brief
+     * 图像综合质量
+     */
+    QVector<ImageParamQuality> allQuality = {sharpnessQuality, sharpnessDurationQuality};
+    qSort(allQuality);
+    ImageParamQuality totalQuality = allQuality.last();
+    mUI.totalQuality->setStyleSheet(sQualityStylesheetColor[totalQuality]);
+
+    /*!
+     * @brief
+     * 自动录制条件
+     */
+    if(totalQuality != ImageParamQuality::Low)
+    {
+        if(mUI.checkBoxAutoRecord->isChecked())
+        {
+            if(!mVideoWriter.isOpened() && !mAutoVideoRecorder->recording())
             {
-                mContinueSharpFrameCount = 0;
                 if(mContinueRecordVideoCount > 0)
                 {
                     --mContinueRecordVideoCount;
-                    beginRecord();
-                    mAutoRecordTimeLimitTimer.start();
+                    beginAutoRecord();
                     mUI.residueRecordCount->setText(QStringLiteral("剩余录制数量：%1").arg(mContinueRecordVideoCount));
                 }
                 else
@@ -560,15 +653,6 @@ void VideoRecord::slotDisplaySharpnessAndAutoRecord(double sharpness, bool isSha
                 }
             }
         }
-        else
-        {
-            mContinueSharpFrameCount = 0;
-        }
-    }
-    else
-    {
-        mUI.isSharp->setText(tips[1]);
-        mContinueSharpFrameCount = 0;
     }
 }
 
@@ -1039,8 +1123,8 @@ bool VideoRecord::insertOneVideoRecord(const QFileInfo &videoFileinfo, VideoInfo
     insertVideoInfo.collectTime = videoFileinfo.created().toTime_t();
     insertVideoInfo.videoDuration = duration;
     insertVideoInfo.absVideoPath = videoAbsPath;
-    insertVideoInfo.pixelSize = 5.6;
-    insertVideoInfo.magnification = 5;
+    insertVideoInfo.pixelSize = pixelsize;
+    insertVideoInfo.magnification = magnification;
     insertVideoInfo.fps = fps;
 
     return true;

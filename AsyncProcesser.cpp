@@ -87,6 +87,7 @@ void AsyncVideoRecorder::run()
                 mWriteIndex = 0;
             }
         }
+        // 不录完不给走
         else if (!mRecoring)
         {
             break;
@@ -97,6 +98,58 @@ void AsyncVideoRecorder::run()
     qDebug() << "mVideoWtirer.release()";
 }
 /**********AsyncVideoRecorder**********/
+
+/**********AsyncVideoAutoRecorder**********/
+AsyncVideoAutoRecorder::AsyncVideoAutoRecorder(cv::VideoWriter &videoWriter) :
+    mVideoWriter(videoWriter), mRecording(false)
+{
+
+}
+
+AsyncVideoAutoRecorder::~AsyncVideoAutoRecorder()
+{
+    if(mRecording)
+    {
+        QEventLoop loop;
+        QTimer timer;
+        connect(&timer, &QTimer::timeout, [&](){
+            if(!mRecording)
+            {
+                mVideoWriter.release();
+                loop.quit();
+            }
+        });
+        timer.start(10);
+        loop.exec();
+    }
+}
+
+void AsyncVideoAutoRecorder::startRecord(QList<cv::Mat> &autorecordCacheQueue)
+{
+    mRecording = true;
+    QList<cv::Mat> tCacheQueue = std::move(autorecordCacheQueue);
+    mCacheQueue = std::move(tCacheQueue);
+    this->start();
+}
+
+bool AsyncVideoAutoRecorder::recording()
+{
+    return mRecording;
+}
+
+void AsyncVideoAutoRecorder::run()
+{
+    for(const cv::Mat& mat : mCacheQueue)
+    {
+        mVideoWriter.write(mat);
+    }
+
+    mVideoWriter.release();
+    qDebug() << "mVideoWtirer.release()";
+
+    mRecording = false;
+}
+/**********AsyncVideoAutoRecorder**********/
 
 /**********AsyncVesselInfoCalculator**********/
 AsyncDataAnalyser::AsyncDataAnalyser(QVector<QImage> &imagelist, QString absVideoPath, double fps, double pixelSize, int magnification) :
@@ -129,9 +182,13 @@ void AsyncDataAnalyser::run()
 
 /**********AsyncSharpnessCalculator**********/
 AsyncSharpnessCalculator::AsyncSharpnessCalculator(QObject *p):
-    QThread(p)
+    QThread(p), mRunning(false), mImageSize(0), mCacheIndex(0), mWriteIndex(0)
 {
+    qRegisterMetaType<cv::Mat>("cv::Mat");
+    qRegisterMetaType<ImageParamQuality>("ImageParamQuality");
 
+    mCacheQueue.resize(2048);
+    mOccupied.resize(2048, false);
 }
 
 AsyncSharpnessCalculator::~AsyncSharpnessCalculator()
@@ -153,25 +210,109 @@ AsyncSharpnessCalculator::~AsyncSharpnessCalculator()
     eventLoop.exec();
 }
 
-void AsyncSharpnessCalculator::cache(QImage &image)
+void AsyncSharpnessCalculator::setImageFormat(int width, int height, int imageSize, QImage::Format format)
 {
-    if(this->isRunning())
+    mImageSize = imageSize;
+    mCalcImage = QImage(width, height, format);
+}
+
+void AsyncSharpnessCalculator::cache(const cv::Mat &mat)
+{
+    lock _lock;
+
+    if (mOccupied[mCacheIndex])
     {
         return;
     }
 
-    mImage = std::move(image);
+    mCacheQueue[mCacheIndex] = mat;
+    mOccupied[mCacheIndex++] = true;
+
+    if (mCacheIndex == 2048)
+    {
+        mCacheIndex = 0;
+    }
+}
+
+void AsyncSharpnessCalculator::begin()
+{
+    auto lambdaSlotCheckRecordFinish = [&](){
+        if (this->isRunning() && mRunning)
+        {
+            QTimer::singleShot(0, &mEventLoop, &QEventLoop::quit);
+        }
+    };
+
+    QTimer timerCheckRecordFinish;
+    connect(&timerCheckRecordFinish, &QTimer::timeout, lambdaSlotCheckRecordFinish);
+
     this->start();
+    timerCheckRecordFinish.start(10);
+    mEventLoop.exec();
+}
+
+void AsyncSharpnessCalculator::stop()
+{
+    auto lambdaSlotCheckRecordFinish = [&](){
+        if (!this->isRunning())
+        {
+            mCacheIndex = 0;
+            mWriteIndex = 0;
+            mOccupied.resize(2048, false);
+            this->quit();
+            QTimer::singleShot(0, &mEventLoop, &QEventLoop::quit);
+        }
+    };
+
+    QTimer timerCheckRecordFinish;
+    connect(&timerCheckRecordFinish, &QTimer::timeout, lambdaSlotCheckRecordFinish);
+
+    mRunning = false;
+    timerCheckRecordFinish.start(10);
+    mEventLoop.exec();
 }
 
 void AsyncSharpnessCalculator::run()
 {
-    double sharpness = 0.0;
-    bool isSharp = false;
+    mRunning = true;
+    while (true)
+    {
+        if (!mRunning)
+        {
+            break;
+        }
+        else if (mOccupied[mWriteIndex])
+        {
+            lock _lock;
 
-    VesselAlgorithm::getImageSharpness(mImage, sharpness, isSharp);
+            cv::Mat mat = mCacheQueue[mWriteIndex];
+            memcpy(mCalcImage.bits(), mat.data, mImageSize);
 
-    emit signalCalcSharpnessFinish(sharpness, isSharp);
+            double sharpness = 0.0;
+            bool isSharp = false;
+
+            VesselAlgorithm::getImageSharpness(mCalcImage, sharpness, isSharp);
+            if(!isSharp)
+            {
+                emit signalCalcSharpnessFinish(mat, ImageParamQuality::Low);
+            }
+            else if(sharpness >= 1.3)
+            {
+                emit signalCalcSharpnessFinish(mat, ImageParamQuality::High);
+            }
+            else
+            {
+                emit signalCalcSharpnessFinish(mat, ImageParamQuality::Middle);
+            }
+
+            mOccupied[mWriteIndex++] = false;
+
+            if (mWriteIndex == 2048)
+            {
+                mWriteIndex = 0;
+            }
+        }
+    }
 }
 /**********AsyncSharpnessCalculator**********/
 

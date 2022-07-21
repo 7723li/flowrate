@@ -50,6 +50,9 @@ public slots:
 
     void stopRecord();
 
+private:
+    void beginAutoRecord();
+
 protected:
     void processOneFrame(const _Fake_Mat& m);
 
@@ -89,16 +92,10 @@ private slots:
     void slotRefreshFramerate();
 
     /*!
-     * @brief
-     * 定时缓存一帧到清晰度线程
-     */
-    void slotCalcSharpness();
-
-    /*!
      * @brief slotDisplaySharpnessAndAutoRecord
      * 清晰度计算完成后 显示清晰度 并 在需要时开始自动录制
      */
-    void slotDisplaySharpnessAndAutoRecord(double sharpness, bool isSharp);
+    void slotDisplaySharpnessAndAutoRecord(cv::Mat mat, ImageParamQuality sharpnessQuality);
 
     void slotAutoRecordChecked(int status);
 
@@ -192,9 +189,11 @@ private:
 
     QPainter mPainter;
 
-    cv::VideoWriter mVideoWriter;
-    cv::Mat mMat;
-    AsyncVideoRecorder* mVideoRecorder;
+    cv::Mat mMat;                                   // 接收SDK的一帧
+    cv::VideoWriter mVideoWriter;                   // 录制视频头
+    AsyncVideoRecorder* mRealTimeVideoRecorder;     // 实时录制线程
+    AsyncVideoAutoRecorder* mAutoVideoRecorder;     // 智能录制线程
+    QList<cv::Mat> mAutoRecordCacheQueue;           // 自动录制的缓存队列
 
     double mConfigFramerate;                        // 相机配置的帧率
     double mRunningFramerate;                       // 相机实际采集帧率
@@ -213,11 +212,8 @@ private:
     bool mShowDebugMessage;                         // 显示调试信息
 
     AsyncSharpnessCalculator mSharpnseeCalculator;  // 异步清晰度计算线程
-    QTimer mSharpnessTimer;                         // 清晰度计算定时器 25ms
     int mContinueSharpFrameCount;                   // 连续清晰的帧数
     int mContinueRecordVideoCount;                  // 连续录制的视频数
-
-    QTimer mAutoRecordTimeLimitTimer;               // 智能录制时长显示定时器 1000ms
 
     QList<QString> mAbsVideoPathList;               // 绝对视频路径列表
     QList<QString> mPkVideoInfoIDList;              // 视频信息的主键列表

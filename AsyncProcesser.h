@@ -30,6 +30,16 @@ typedef struct _Fake_Mat
     unsigned char* data;    // 数据
 }_Fake_Mat;
 
+/*!
+ * @brief 图像参数质量
+ */
+enum ImageParamQuality
+{
+    High = 0,
+    Middle = 1,
+    Low = 2
+};
+
 using RegionPoints = QVector<QPoint>;
 
 /*!
@@ -70,6 +80,35 @@ private:
     int mWriteIndex;
 
     QEventLoop mEventLoop;
+};
+
+/*!
+ * @brief
+ * 自动录制线程
+ *
+ * @attention
+ * 由于自动录制的帧数有限 且存在连续并行录制的情况 所以设计成临时线程
+ */
+class AsyncVideoAutoRecorder : public QThread
+{
+public:
+    explicit AsyncVideoAutoRecorder(cv::VideoWriter& videoWriter);
+
+    virtual ~AsyncVideoAutoRecorder() override;
+
+    void startRecord(QList<cv::Mat>& autorecordCacheQueue);
+
+    bool recording();
+
+protected:
+    virtual void run() override;
+
+private:
+    cv::VideoWriter& mVideoWriter;
+
+    QList<cv::Mat> mCacheQueue;
+
+    bool mRecording;
 };
 
 /*!
@@ -117,20 +156,46 @@ class AsyncSharpnessCalculator : public QThread
 {
     Q_OBJECT
 
+    struct lock
+    {
+        lock(){ _mutex.lock(); }
+        ~lock(){ _mutex.unlock(); }
+        std::mutex _mutex;
+    };
+
 public:
     explicit AsyncSharpnessCalculator(QObject* p = nullptr);
     virtual ~AsyncSharpnessCalculator() override;
 
-    void cache(QImage& image);
+    /*!
+     * @attention
+     * 不要迷惑为什么要多出个imageSize参数 因为不是图像面积的意思 要考虑位深
+     */
+    void setImageFormat(int width, int height, int imageSize, QImage::Format format);
+
+    void cache(const cv::Mat& mat);
+
+    void begin();
+
+    void stop();
 
 protected:
     virtual void run() override;
 
 signals:
-    void signalCalcSharpnessFinish(double sharpness, bool isSharp);
+    void signalCalcSharpnessFinish(cv::Mat calcMat, ImageParamQuality sharpnessQuality);
 
 private:
-    QImage mImage;
+    bool mRunning;
+    QEventLoop mEventLoop;
+
+    int mImageSize;
+    QImage mCalcImage;
+
+    std::vector<cv::Mat> mCacheQueue;
+    std::vector<bool> mOccupied;
+    int mCacheIndex;
+    int mWriteIndex;
 };
 
 /*!

@@ -2,15 +2,27 @@
 
 void HalconInterfaceBase::preProcess(const HObject &ImageOri, HObject *ImageGauss, HObject *RegionUnion)
 {
+    HObject ImageZoom, ImageEmphasize, ImageGaussCalc;
     HObject ImageMean, RegionDynThresh, RegionClosing;
     HObject RawRegionConnected, RegionConnected;
 
-    HTuple Channels, AreaRawRegionConnected;
+    HTuple Mean, Deviation, MaskSize;
+    HTuple Width, Height, Channels, AreaRawRegionConnected;
     HTuple useless, MinArea, MaxArea;
+    HTuple _HomMat2DIdentity, _HomMat2DScale;
+
+    GetImageSize(ImageOri, &Width, &Height);
 
     try
     {
+        // 无论原图像分辨率是多少 都先强制将图像缩放至(480, 480)方便计算 计算完毕后再将区域与原分辨率缩放匹配
+        ZoomImageSize(ImageOri, &ImageZoom, 480, 480, "constant");
+        Intensity(ImageZoom, ImageZoom, &Mean, &Deviation);
+        MaskSize = HTuple(Deviation / (Mean / Deviation)).TupleRound();
+        Emphasize(ImageZoom, &ImageEmphasize, MaskSize, MaskSize, 2);
+
         GaussFilter(ImageOri, ImageGauss, 7);
+        GaussFilter(ImageEmphasize, &ImageGaussCalc, 7);
     }
     catch (HException &HDevExpDefaultException)
     {
@@ -20,18 +32,18 @@ void HalconInterfaceBase::preProcess(const HObject &ImageOri, HObject *ImageGaus
     }
 
     //寻找血管区域 均值滤波+动态阈值
-    MeanImage(*ImageGauss, &ImageMean, 43, 43);
-    DynThreshold(*ImageGauss, ImageMean, &RegionDynThresh, 9, "dark");
+    MeanImage(ImageGaussCalc, &ImageMean, 23, 23);
+    DynThreshold(ImageGaussCalc, ImageMean, &RegionDynThresh, 9, "dark");
 
     //闭运算补小洞
-    ClosingCircle(RegionDynThresh, &RegionClosing, 3);
+    ClosingCircle(RegionDynThresh, &RegionClosing, 2.5);
 
     //分散出若干个连接起来的区域 大部分大概率是血管区域
     Connection(RegionClosing, &RawRegionConnected);
 
     //根据面积筛选掉噪音
     AreaCenter(RawRegionConnected, &AreaRawRegionConnected, &useless, &useless);
-    MinArea = 50;
+    MinArea = 20;
     TupleMax(AreaRawRegionConnected, &MaxArea);
     if (MaxArea < MinArea)
     {
@@ -41,78 +53,73 @@ void HalconInterfaceBase::preProcess(const HObject &ImageOri, HObject *ImageGaus
 
     //合并 检测到的分散血管区域 后面有用
     Union1(RegionConnected, &(*RegionUnion));
+
+    // 将血管区域与原分辨率缩放匹配
+    HomMat2dIdentity(&_HomMat2DIdentity);
+    HomMat2dScale(_HomMat2DIdentity, Height.TupleReal() / 480.0, Width.TupleReal() / 480.0, 0, 0, &_HomMat2DScale);
+    AffineTransRegion(*RegionUnion, RegionUnion, _HomMat2DScale, "constant");
 }
 
 void HalconInterfaceBase::getImageSharpness(const HObject &ImageOri, HTuple *sharpness, HTuple *isSharp)
 {
-    HObject  Rectangle, ImageEmphasize, ImageGauss;
+    HObject  Rectangle, ImageEmphasize, ImageZoom;
     HObject  ImaAmp, ImaDir, ImageMean, RegionDynThresh;
     HObject  RegionUnion, ConnectedRegions, SelectedRegions;
     HObject  skeleton;
 
-    HTuple  Width, Height, Mean, Deviation;
     HTuple  Area2, useless, Max, Number, Area;
     HTuple  Area1;
 
     *sharpness = 0;
     *isSharp = false;
 
-    //计算图像整体的灰度方差
-    GetImageSize(ImageOri, &Width, &Height);
-    GenRectangle1(&Rectangle, 0, 0, Height-1, Width-1);
-    Intensity(Rectangle, ImageOri, &Mean, &Deviation);
-
-    if (Deviation > 0)
+    try
     {
-        //根据灰度方差进行对比度强化 如果灰度方差大 说明原来的对比度较高 则强化的程度可以降低 反之亦然
-        //强化完成后做一次小型模糊 弱化噪点
-        try
-        {
-            Emphasize(ImageOri, &ImageEmphasize, 255.0 / Deviation, 255.0 / Deviation, 1);
-        }
-        catch(...)
-        {
-            return;
-        }
-        GaussFilter(ImageEmphasize, &ImageGauss, 3);
+        // 无论原图像分辨率是多少 都先强制将图像缩放至(640, 640)方便计算
+        ZoomImageSize(ImageOri, &ImageZoom, 640, 640, "constant");
+        Emphasize(ImageZoom, &ImageEmphasize, 23, 23, 2);
+    }
+    catch(...)
+    {
+        return;
+    }
 
-        //canny计算并提取图像上的边缘
-        EdgesImage(ImageGauss, &ImaAmp, &ImaDir, "canny", 1, "nms", 5, 8);
-        MeanImage(ImaAmp, &ImageMean, 43, 43);
-        DynThreshold(ImaAmp, ImageMean, &RegionDynThresh, 5, "light");
+    //canny计算并提取图像上的边缘
+    EdgesImage(ImageEmphasize, &ImaAmp, &ImaDir, "canny", 1, "nms", 5, 8);
+    MeanImage(ImaAmp, &ImageMean, 43, 43);
+    DynThreshold(ImaAmp, ImageMean, &RegionDynThresh, 5, "light");
 
-        //提取出的边缘必须起码符合有10条以上大于等于100px 否则直接判断为模糊
-        Connection(RegionDynThresh, &ConnectedRegions);
-        AreaCenter(ConnectedRegions, &Area2, &useless, &useless);
-        TupleMax(Area2, &Max);
-        if (Max >= 100)
+    //提取出的边缘必须起码符合有10条以上大于等于100px 否则直接判断为模糊
+    Connection(RegionDynThresh, &ConnectedRegions);
+    AreaCenter(ConnectedRegions, &Area2, &useless, &useless);
+    TupleMax(Area2, &Max);
+    if (Max >= 100)
+    {
+        SelectShape(ConnectedRegions, &SelectedRegions, "area", "and", 100, Max);
+
+        CountObj(SelectedRegions, &Number);
+        if (Number >= 10)
         {
-            SelectShape(ConnectedRegions, &SelectedRegions, "area", "and", 100, Max);
+            Union1(SelectedRegions, &RegionUnion);
 
-            CountObj(SelectedRegions, &Number);
-            if (Number >= 10)
+            //用边缘和边缘骨架的像素之商作为清晰度评分
+            //约清晰 评分约接近1 但永远不低于1
+            Skeleton(RegionUnion, &skeleton);
+            AreaCenter(RegionUnion, &Area, &useless, &useless);
+            AreaCenter(skeleton, &Area1, &useless, &useless);
+
+            if (Area > 0 && Area1 > 0)
             {
-                Union1(SelectedRegions, &RegionUnion);
-
-                //用边缘和边缘骨架的像素之商作为清晰度评分
-                //约清晰 评分约接近1 但永远不低于1
-                Skeleton(RegionUnion, &skeleton);
-                AreaCenter(RegionUnion, &Area, &useless, &useless);
-                AreaCenter(skeleton, &Area1, &useless, &useless);
-
-                if (Area > 0 && Area1 > 0)
-                {
-                    *sharpness = Area.TupleReal() / Area1.TupleReal();
-                }
-                else
-                {
-                    *sharpness= 0;
-                }
+                *sharpness = Area.TupleReal() / Area1.TupleReal();
+            }
+            else
+            {
+                *sharpness= 0;
             }
         }
-
-        *isSharp = (*sharpness >= 1.0);
     }
+
+    *isSharp = (*sharpness >= 1.0);
 }
 
 void HalconInterfaceBase::imagelistAntishake(HObject ImageList, HObject *RegionVesselConcat, HObject *ImageGaussConcat, HTuple AntiShakeFrameNumber, HTuple *TupleProcessImageIndex, HTuple *TupleTranPrevToRearRows, HTuple *TupleTranPrevToRearCols)
@@ -994,36 +1001,18 @@ void HalconInterfaceBase::calculateGlycocalyx(HObject CenterLines, bool isManual
 
 void HalconInterfaceBase::calculateFlowrate(HObject ImageGaussConcat, HObject RegionVesselSplited, HTuple NumberCenterLines, HTuple TupleProcessImageIndex, HTuple TupleTranPrevToRearRows, HTuple TupleTranPrevToRearCols, HTuple Pixelsize, HTuple Magnification, HTuple Fps, HTuple *Flowrate)
 {
-    HObject  ImageGaussAlignConcat, SkeletonRegionVesselSplited;
-    HObject  UnionSkeletonRegionVesselSplited, ImageAlgoithmCommonPrev;
-    HObject  ImageAlgoithmCommonRear, ImageVesselPrev;
-    HObject  ImageVesselRear, ImageVesselPrevInvert, ImageVesselRearInvert;
-    HObject  ImageFlowMotion, ImageFlowMotionMean, UnionRegionFlowMotion;
-    HObject  RegionFlowMotion;
+    HObject ImageGaussAlignConcat,ImageAlgoithmCommonPrev;
+    HObject ImageAlgoithmCommonRear,RegionVessel;
 
-    HTuple  NumberImageAlgoithmCommonConcat, TrackAreas;
-    HTuple  TrackAreasCount, I, TrackArea, useless;
-    HTuple  TrackAreasCountPlus, ZeroIndices, MeanTrackArea;
+    HTuple NumberImageAlgoithmCommonConcat,TrackAreas;
+    HTuple TrackAreasCount,I,TrackArea,NumberRegionVesselSplited;
+    HTuple J,RowsRegionVessel,ColsRegionVessel;
+    HTuple GrayvalAlgoithmCommonPrev,GrayvalAlgoithmCommonReal;
+    HTuple GrayvalDiff,GrayvalDiffMean,TrackAreasCountPlus;
+    HTuple ZeroIndices,MeanTrackArea;
 
     //将血管图像移动回跟首帧重叠
-    alignAntishakeRegion(ImageGaussConcat, &ImageGaussAlignConcat, 1, 26, TupleTranPrevToRearRows,
-    TupleTranPrevToRearCols, "image");
-
-    //////////////////////////////////////////////////////////////////////////////////// *
-    //
-    //@note
-    //红细胞流速(um/s) = 流动轨迹距离 / 前后帧时间差(s) * 像素尺寸(um/px) / 放大倍率
-    //
-    //令血管骨架长度为血管总长度 则可认为血管总长度为血管内可流动的最大距离
-    //可推算 流动轨迹距离 = 血管骨架上的流动面积
-    //
-    //除以两帧之间的时间差 等价于帧率相乘代替
-    //
-    //即 红细胞流速(um/s) = 血管骨架上的流动面积 * 帧率 * 像素尺寸(um/px) / 放大倍率
-    //
-    //////////////////////////////////////////////////////////////////////////////////// *
-    Skeleton(RegionVesselSplited, &SkeletonRegionVesselSplited);
-    Union1(SkeletonRegionVesselSplited, &UnionSkeletonRegionVesselSplited);
+    alignAntishakeRegion(ImageGaussConcat, &ImageGaussAlignConcat, 1, 26, TupleTranPrevToRearRows, TupleTranPrevToRearCols, "image");
 
     CountObj(ImageGaussAlignConcat, &NumberImageAlgoithmCommonConcat);
     if (NumberImageAlgoithmCommonConcat > 25)
@@ -1044,22 +1033,26 @@ void HalconInterfaceBase::calculateFlowrate(HObject ImageGaussConcat, HObject Re
         SelectObj(ImageGaussAlignConcat, &ImageAlgoithmCommonPrev, I);
         SelectObj(ImageGaussAlignConcat, &ImageAlgoithmCommonRear, I + 1);
 
-        //计算流动轨迹
-        //注：用前后帧防抖后的共同区域 而非之前的合并区域进行计算 避免防抖造成的数据误差
-        //注2：红细胞体现为低灰度 因此需要将图片反色 相减后得出的才是后帧的红细胞
-        ReduceDomain(ImageAlgoithmCommonPrev, UnionSkeletonRegionVesselSplited, &ImageVesselPrev);
-        ReduceDomain(ImageAlgoithmCommonRear, UnionSkeletonRegionVesselSplited, &ImageVesselRear);
+        TrackArea = HTuple();
+        CountObj(RegionVesselSplited, &NumberRegionVesselSplited);
+        for(J = 1; J <= NumberRegionVesselSplited; ++J)
+        {
+            SelectObj(RegionVesselSplited, &RegionVessel, J);
+            GetRegionPoints(RegionVessel, &RowsRegionVessel, &ColsRegionVessel);
+            if(RowsRegionVessel.TupleLength() && ColsRegionVessel.TupleLength())
+            {
+                GetGrayval(ImageAlgoithmCommonPrev, RowsRegionVessel, ColsRegionVessel, &GrayvalAlgoithmCommonPrev);
+                GetGrayval(ImageAlgoithmCommonRear, RowsRegionVessel, ColsRegionVessel, &GrayvalAlgoithmCommonReal);
+                GrayvalDiff = HTuple(GrayvalAlgoithmCommonPrev-GrayvalAlgoithmCommonReal).TuplePow(2);
+                TupleMean(GrayvalDiff, &GrayvalDiffMean);
+                TrackArea = TrackArea.TupleConcat(GrayvalDiffMean);
+            }
+            else
+            {
+                TrackArea = TrackArea.TupleConcat(0);
+            }
+        }
 
-        InvertImage(ImageVesselPrev, &ImageVesselPrevInvert);
-        InvertImage(ImageVesselRear, &ImageVesselRearInvert);
-
-        SubImage(ImageVesselRear, ImageVesselPrev, &ImageFlowMotion, 1, 0);
-        MeanImage(ImageFlowMotion, &ImageFlowMotionMean, 23, 23);
-        DynThreshold(ImageFlowMotion, ImageFlowMotionMean, &UnionRegionFlowMotion, 5, "light");
-
-        Intersection(SkeletonRegionVesselSplited, UnionRegionFlowMotion, &RegionFlowMotion);
-
-        AreaCenter(RegionFlowMotion, &TrackArea, &useless, &useless);
         if (TrackArea.TupleLength() > 0)
         {
             TrackAreas += TrackArea;
