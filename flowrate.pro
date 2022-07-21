@@ -75,5 +75,5 @@ qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
 
-RESOURCES += \
-    flowrate.qrc
+RESOURCES += flowrate.qrc
+RC_ICONS = image/icon.ico
