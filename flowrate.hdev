@@ -235,7 +235,7 @@
 <l>endtry</l>
 <c></c>
 <c>* 寻找血管区域 均值滤波+动态阈值</c>
-<l>mean_image(ImageGaussCalc, ImageMean, 23, 23)</l>
+<l>mean_image(ImageGaussCalc, ImageMean, (Width+Height)/2/23, (Width+Height)/2/23)</l>
 <l>dyn_threshold(ImageGaussCalc, ImageMean, RegionDynThresh, 9, 'dark')</l>
 <c></c>
 <c>* 闭运算补小洞</c>
@@ -2195,9 +2195,9 @@
 <c>* ////////////////////////////////////////////////////////////////////////////////// *</c>
 <c>* </c>
 <c>* @note</c>
-<c>* 红细胞流速(um/s) = 像素灰度变化趋势 / 前后帧时间差(s) * 像素尺寸(um/px) / 放大倍率</c>
+<c>* 红细胞流速(um/s) = 像素灰度变化趋势 * 像素变化位移距离 / 前后帧时间差(s) * 像素尺寸(um/px) / 放大倍率</c>
 <c>*</c>
-<c>* 像素灰度变化趋势 = mean(pow(区域内前帧灰度 - 区域内后帧灰度, 2))</c>
+<c>* 像素灰度变化趋势 = 区域内前帧灰度 - 区域内后帧灰度</c>
 <c>* 可以理解为区域内逐个像素对比 灰度变化值的变化越大 流速就越大</c>
 <c>* </c>
 <c>* ////////////////////////////////////////////////////////////////////////////////// *</c>
@@ -2209,6 +2209,8 @@
 <l>    NumberImageAlgoithmCommonConcat:=NumberImageAlgoithmCommonConcat-1</l>
 <l>endif</l>
 <c></c>
+<l>skeleton(RegionVesselSplited, SkeletonRegionVesselSplited)</l>
+<c></c>
 <c>* 流动面积总和 流动面积有效计数</c>
 <l>tuple_gen_const(NumberCenterLines, 0, TrackAreas)</l>
 <l>tuple_gen_const(NumberCenterLines, 0, TrackAreasCount)</l>
@@ -2218,16 +2220,37 @@
 <l>    select_obj(ImageGaussAlignConcat, ImageAlgoithmCommonRear, I+1)</l>
 <c>    </c>
 <l>    TrackArea:=[]</l>
-<l>    count_obj(RegionVesselSplited, NumberRegionVesselSplited)</l>
+<l>    count_obj(SkeletonRegionVesselSplited, NumberRegionVesselSplited)</l>
 <l>    for J:=1 to NumberRegionVesselSplited by 1</l>
-<l>        select_obj(RegionVesselSplited, RegionVessel, J)</l>
+<l>        select_obj(SkeletonRegionVesselSplited, RegionVessel, J)</l>
 <l>        get_region_points(RegionVessel, RowsRegionVessel, ColsRegionVessel)</l>
 <l>        if(|RowsRegionVessel| and |ColsRegionVessel|)</l>
 <l>            get_grayval(ImageAlgoithmCommonPrev, RowsRegionVessel, ColsRegionVessel, GrayvalAlgoithmCommonPrev)</l>
-<l>            get_grayval(ImageAlgoithmCommonRear, RowsRegionVessel, ColsRegionVessel, GrayvalAlgoithmCommonReal)</l>
-<l>            GrayvalDiff:=pow(GrayvalAlgoithmCommonPrev-GrayvalAlgoithmCommonReal, 2)</l>
-<l>            tuple_mean(GrayvalDiff, GrayvalDiffMean)</l>
-<l>            TrackArea:=[TrackArea, GrayvalDiffMean]</l>
+<l>            get_grayval(ImageAlgoithmCommonRear, RowsRegionVessel, ColsRegionVessel, GrayvalAlgoithmCommonRear)</l>
+<c></c>
+<l>            PixelGrayvals:=GrayvalAlgoithmCommonPrev-GrayvalAlgoithmCommonRear</l>
+<l>            PixelDistances:=[]</l>
+<l>            PixelIndex:=-1</l>
+<c>            </c>
+<l>            for K:=0 to |PixelGrayvals|-1 by 1</l>
+<l>                if(PixelGrayvals[K]&gt;0)</l>
+<l>                    if(PixelIndex!=-1)</l>
+<l>                        distance_pp(RowsRegionVessel[K], ColsRegionVessel[K], RowsRegionVessel[PixelIndex], ColsRegionVessel[PixelIndex], PixelDistance)</l>
+<l>                        PixelDistances:=[PixelDistances, PixelDistance]</l>
+<l>                        PixelIndex:=K</l>
+<l>                    else</l>
+<l>                        PixelDistances:=[PixelDistances, 1]</l>
+<l>                        PixelIndex:=K</l>
+<l>                    endif</l>
+<l>                else</l>
+<l>                    PixelDistances:=[PixelDistances, 0]</l>
+<l>                    PixelGrayvals[K]:=0</l>
+<l>                endif</l>
+<l>            endfor</l>
+<c>            </c>
+<l>            FlowtrackDistance:=PixelGrayvals*PixelDistances</l>
+<l>            tuple_mean(FlowtrackDistance, MeanFlowtrackDistance)</l>
+<l>            TrackArea:=[TrackArea, MeanFlowtrackDistance]</l>
 <l>        else</l>
 <l>            TrackArea:=[TrackArea, 0]</l>
 <l>        endif</l>

@@ -32,7 +32,7 @@ void HalconInterfaceBase::preProcess(const HObject &ImageOri, HObject *ImageGaus
     }
 
     //寻找血管区域 均值滤波+动态阈值
-    MeanImage(ImageGaussCalc, &ImageMean, 23, 23);
+    MeanImage(ImageGaussCalc, &ImageMean, (Width + Height) / 2 / 23, (Width + Height) / 2 / 23);
     DynThreshold(ImageGaussCalc, ImageMean, &RegionDynThresh, 9, "dark");
 
     //闭运算补小洞
@@ -1001,18 +1001,28 @@ void HalconInterfaceBase::calculateGlycocalyx(HObject CenterLines, bool isManual
 
 void HalconInterfaceBase::calculateFlowrate(HObject ImageGaussConcat, HObject RegionVesselSplited, HTuple NumberCenterLines, HTuple TupleProcessImageIndex, HTuple TupleTranPrevToRearRows, HTuple TupleTranPrevToRearCols, HTuple Pixelsize, HTuple Magnification, HTuple Fps, HTuple *Flowrate)
 {
-    HObject ImageGaussAlignConcat,ImageAlgoithmCommonPrev;
+    HObject SkeletonRegionVesselSplited,ImageGaussAlignConcat,ImageAlgoithmCommonPrev;
     HObject ImageAlgoithmCommonRear,RegionVessel;
 
     HTuple NumberImageAlgoithmCommonConcat,TrackAreas;
     HTuple TrackAreasCount,I,TrackArea,NumberRegionVesselSplited;
-    HTuple J,RowsRegionVessel,ColsRegionVessel;
-    HTuple GrayvalAlgoithmCommonPrev,GrayvalAlgoithmCommonReal;
-    HTuple GrayvalDiff,GrayvalDiffMean,TrackAreasCountPlus;
-    HTuple ZeroIndices,MeanTrackArea;
+    HTuple J,K,RowsRegionVessel,ColsRegionVessel;
+    HTuple GrayvalAlgoithmCommonPrev,GrayvalAlgoithmCommonRear;
+    HTuple PixelGrayvals,PixelDistances,PixelIndex,MeanFlowtrackDistance,TrackAreasCountPlus;
+    HTuple ZeroIndices,MeanTrackArea,PixelDistance;
 
     //将血管图像移动回跟首帧重叠
     alignAntishakeRegion(ImageGaussConcat, &ImageGaussAlignConcat, 1, 26, TupleTranPrevToRearRows, TupleTranPrevToRearCols, "image");
+
+    /* ////////////////////////////////////////////////////////////////////////////////// */
+    //
+    // @note
+    // 红细胞流速(um/s) = 像素灰度变化趋势 * 像素变化位移距离 / 前后帧时间差(s) * 像素尺寸(um/px) / 放大倍率
+    //
+    // 像素灰度变化趋势 = 区域内前帧灰度 - 区域内后帧灰度
+    // 可以理解为区域内逐个像素对比 灰度变化值的变化越大 流速就越大
+    //
+    /* ////////////////////////////////////////////////////////////////////////////////// */
 
     CountObj(ImageGaussAlignConcat, &NumberImageAlgoithmCommonConcat);
     if (NumberImageAlgoithmCommonConcat > 25)
@@ -1023,6 +1033,7 @@ void HalconInterfaceBase::calculateFlowrate(HObject ImageGaussConcat, HObject Re
     {
         NumberImageAlgoithmCommonConcat = NumberImageAlgoithmCommonConcat - 1;
     }
+    Skeleton(RegionVesselSplited, &SkeletonRegionVesselSplited);
 
     //流动面积总和 流动面积有效计数
     TupleGenConst(NumberCenterLines, 0, &TrackAreas);
@@ -1034,18 +1045,46 @@ void HalconInterfaceBase::calculateFlowrate(HObject ImageGaussConcat, HObject Re
         SelectObj(ImageGaussAlignConcat, &ImageAlgoithmCommonRear, I + 1);
 
         TrackArea = HTuple();
-        CountObj(RegionVesselSplited, &NumberRegionVesselSplited);
+        CountObj(SkeletonRegionVesselSplited, &NumberRegionVesselSplited);
         for(J = 1; J <= NumberRegionVesselSplited; ++J)
         {
-            SelectObj(RegionVesselSplited, &RegionVessel, J);
+            SelectObj(SkeletonRegionVesselSplited, &RegionVessel, J);
             GetRegionPoints(RegionVessel, &RowsRegionVessel, &ColsRegionVessel);
             if(RowsRegionVessel.TupleLength() && ColsRegionVessel.TupleLength())
             {
                 GetGrayval(ImageAlgoithmCommonPrev, RowsRegionVessel, ColsRegionVessel, &GrayvalAlgoithmCommonPrev);
-                GetGrayval(ImageAlgoithmCommonRear, RowsRegionVessel, ColsRegionVessel, &GrayvalAlgoithmCommonReal);
-                GrayvalDiff = HTuple(GrayvalAlgoithmCommonPrev-GrayvalAlgoithmCommonReal).TuplePow(2);
-                TupleMean(GrayvalDiff, &GrayvalDiffMean);
-                TrackArea = TrackArea.TupleConcat(GrayvalDiffMean);
+                GetGrayval(ImageAlgoithmCommonRear, RowsRegionVessel, ColsRegionVessel, &GrayvalAlgoithmCommonRear);
+
+                PixelGrayvals = GrayvalAlgoithmCommonPrev-GrayvalAlgoithmCommonRear;
+                PixelDistances = HTuple();
+                PixelIndex = -1;
+
+                for(K = 0; K <= PixelGrayvals.TupleLength(); ++K)
+                {
+                    if(PixelGrayvals[K] > 0)
+                    {
+                        if(PixelIndex != -1)
+                        {
+                            DistancePp(RowsRegionVessel[K], ColsRegionVessel[K], RowsRegionVessel[PixelIndex], ColsRegionVessel[PixelIndex], &PixelDistance);
+                            PixelDistances = PixelDistances.TupleConcat(PixelDistance);
+                            PixelIndex = K;
+                        }
+                        else
+                        {
+                            PixelDistances = PixelDistances.TupleConcat(1);
+                            PixelIndex = K;
+                        }
+                    }
+                    else
+                    {
+                        PixelDistances = PixelDistances.TupleConcat(0);
+                        PixelGrayvals[K] = 0;
+                    }
+                }
+
+                MeanFlowtrackDistance = PixelGrayvals * PixelDistance;
+                TupleMean(PixelGrayvals, &MeanFlowtrackDistance);
+                TrackArea = TrackArea.TupleConcat(MeanFlowtrackDistance);
             }
             else
             {
@@ -1068,12 +1107,12 @@ void HalconInterfaceBase::calculateFlowrate(HObject ImageGaussConcat, HObject Re
 
             TrackAreasCount += TrackAreasCountPlus;
         }
+    }
 
-        TupleFind(TrackAreasCount, 0, &ZeroIndices);
-        if (ZeroIndices.TupleLength() > 0 && ZeroIndices!=-1)
-        {
-            TupleReplace(TrackAreasCount, ZeroIndices, 1, &TrackAreasCount);
-        }
+    TupleFind(TrackAreasCount, 0, &ZeroIndices);
+    if (ZeroIndices.TupleLength() > 0 && ZeroIndices!=-1)
+    {
+        TupleReplace(TrackAreasCount, ZeroIndices, 1, &TrackAreasCount);
     }
 
     //计算流速 公式见上 此处以大恒相机为例
